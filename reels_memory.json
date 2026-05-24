@@ -1,0 +1,46 @@
+{
+  "title": "POV：全自動化 AI 小編跟廣告",
+  "subtitle": {
+    "traditional_chinese": true,
+    "bilingual": true,
+    "chinese_font_size": 51,
+    "english_font_size": 30,
+    "chinese_letter_spacing": 2,
+    "english_letter_spacing": 0.5,
+    "chinese_bottom_margin": 430,
+    "english_bottom_margin": 365,
+    "safe_area_note": "Title and subtitles stay away from Instagram Reels top and bottom UI.",
+    "mixed_language_spacing": true,
+    "max_chinese_lines": 2,
+    "max_english_lines": 2
+  },
+  "editing": {
+    "remove_pauses": true,
+    "silence_noise_db": -35,
+    "silence_min_duration": 0.32,
+    "keep_bye_ending": true,
+    "do_not_over_rewrite_story": true,
+    "remove_filler_words_in_subtitle": true
+  },
+  "export": {
+    "format": "IG Reels",
+    "width": 720,
+    "height": 1280,
+    "video_bitrate": "1600k",
+    "maxrate": "2200k",
+    "bufsize": "3200k",
+    "audio_bitrate": "128k",
+    "pix_fmt": "yuv420p",
+    "target_note": "Small enough to AirDrop/save to phone album and upload to Instagram Reels."
+  },
+  "cover": {
+    "enabled": true,
+    "style": "bold white/yellow IG Reels cover",
+    "top_label": "POV",
+    "main_line_1": "全自動化 AI",
+    "main_line_2": "小編跟廣告",
+    "english_line": "AI editor + ads on autopilot",
+    "bottom_line_1": "小團隊也能",
+    "bottom_line_2": "跑出一整套自動化"
+  }
+}

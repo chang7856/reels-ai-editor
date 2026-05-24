@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reels AI Editor</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #191919;
+      --muted: #6f737a;
+      --line: #d9dde3;
+      --panel: #ffffff;
+      --soft: #f5f6f8;
+      --accent: #f2c94c;
+      --ok: #166534;
+      --bad: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #eef0f3;
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 24px;
+    }
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    .lang {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      flex: 0 0 auto;
+    }
+    .lang button {
+      min-height: 34px;
+      padding: 7px 11px;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 800;
+    }
+    .lang button.active {
+      background: #111827;
+      color: #fff;
+    }
+    h1 {
+      margin: 0;
+      font-size: 34px;
+      letter-spacing: 0;
+    }
+    .subtitle {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+      gap: 18px;
+      align-items: start;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+    }
+    h2 {
+      margin: 0 0 16px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+    .drop {
+      border: 2px dashed #bcc3cc;
+      border-radius: 8px;
+      background: var(--soft);
+      min-height: 220px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 24px;
+      transition: border-color .15s ease, background .15s ease;
+    }
+    .drop.drag {
+      border-color: #111827;
+      background: #fff9df;
+    }
+    input[type="file"] {
+      display: none;
+    }
+    .file-pick {
+      background: #fff;
+      color: #111827;
+      border: 1px solid var(--line);
+      min-height: 40px;
+      padding: 9px 13px;
+      font-size: 15px;
+    }
+    button {
+      border: 0;
+      border-radius: 7px;
+      background: #111827;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 13px 18px;
+      cursor: pointer;
+      min-height: 46px;
+    }
+    button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+    .hint {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .memory {
+      display: grid;
+      gap: 10px;
+      font-size: 14px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 0;
+      border-bottom: 1px solid #edf0f3;
+    }
+    .row:last-child { border-bottom: 0; }
+    .key { color: var(--muted); }
+    .value { font-weight: 700; text-align: right; }
+    .status {
+      margin-top: 18px;
+      border-top: 1px solid var(--line);
+      padding-top: 18px;
+      display: none;
+    }
+    .status.show { display: block; }
+    .bar {
+      height: 9px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+    .bar span {
+      display: block;
+      width: 18%;
+      height: 100%;
+      background: var(--accent);
+      animation: pulse 1.25s ease-in-out infinite alternate;
+    }
+    @keyframes pulse {
+      from { width: 18%; }
+      to { width: 92%; }
+    }
+    pre {
+      max-height: 260px;
+      overflow: auto;
+      background: #111827;
+      color: #e5e7eb;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .result {
+      display: none;
+      margin-top: 16px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .result.show { display: flex; }
+    .download {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 11px 15px;
+      border-radius: 7px;
+      background: #f2c94c;
+      color: #111827;
+      text-decoration: none;
+      font-weight: 800;
+    }
+    .error { color: var(--bad); font-weight: 700; }
+    .ok { color: var(--ok); font-weight: 700; }
+    @media (max-width: 860px) {
+      main { padding: 24px 14px; }
+      header { display: block; }
+      .grid { grid-template-columns: 1fr; }
+      h1 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Reels AI Editor</h1>
+        <p class="subtitle" data-i18n="heroSubtitle">上傳原始影片，自動剪停頓、上雙語字幕、產生 IG Reels 壓縮版與封面。</p>
+      </div>
+      <div class="lang" aria-label="Language">
+        <button id="langZh" type="button" class="active">中文</button>
+        <button id="langEn" type="button">EN</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section>
+        <h2 data-i18n="uploadTitle">上傳影片</h2>
+        <form id="form">
+          <div class="drop" id="drop">
+            <div>
+              <input id="video" name="video" type="file" accept="video/mp4,video/quicktime,video/*">
+              <button class="file-pick" id="chooseFile" type="button" data-i18n="chooseFile">選擇檔案</button>
+              <p class="hint" data-i18n="uploadHint">建議上傳原始 MOV 或 MP4。輸出會直接壓成手機好傳、適合 IG Reels 的版本。</p>
+            </div>
+          </div>
+          <div class="actions">
+            <button id="submit" type="submit" data-i18n="startButton">開始自動剪輯</button>
+            <span id="picked" class="hint" data-i18n="noFile">尚未選擇檔案</span>
+          </div>
+        </form>
+
+        <div id="status" class="status">
+          <div id="state" class="hint" data-i18n="ready">準備中</div>
+          <div class="bar"><span></span></div>
+          <pre id="log"></pre>
+          <div id="result" class="result"></div>
+        </div>
+      </section>
+
+      <section>
+        <h2 data-i18n="memoryTitle">已寫進程式的記憶</h2>
+        <div class="memory">
+          <div class="row"><span class="key" data-i18n="memoryTitleLabel">標題</span><span class="value">{{ memory.title }}</span></div>
+          <div class="row"><span class="key" data-i18n="memorySubtitleLabel">字幕</span><span class="value" data-i18n="memorySubtitleValue">繁中 + 英文、置中、安全區</span></div>
+          <div class="row"><span class="key" data-i18n="memoryZhSpacing">中文字距</span><span class="value">{{ memory.subtitle.chinese_letter_spacing }}</span></div>
+          <div class="row"><span class="key" data-i18n="memoryEnSize">英文字級</span><span class="value">{{ memory.subtitle.english_font_size }}</span></div>
+          <div class="row"><span class="key" data-i18n="memorySize">輸出尺寸</span><span class="value">{{ memory.export.width }} x {{ memory.export.height }}</span></div>
+          <div class="row"><span class="key" data-i18n="memoryBitrate">影片碼率</span><span class="value">{{ memory.export.video_bitrate }}</span></div>
+          <div class="row"><span class="key" data-i18n="memoryCoverLabel">封面</span><span class="value" data-i18n="memoryCoverValue">白字 + 黃字 Reels 風格</span></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const form = document.getElementById("form");
+    const video = document.getElementById("video");
+    const picked = document.getElementById("picked");
+    const submit = document.getElementById("submit");
+    const statusBox = document.getElementById("status");
+    const state = document.getElementById("state");
+    const log = document.getElementById("log");
+    const result = document.getElementById("result");
+    const drop = document.getElementById("drop");
+    const chooseFile = document.getElementById("chooseFile");
+    const langZh = document.getElementById("langZh");
+    const langEn = document.getElementById("langEn");
+    let currentLang = localStorage.getItem("reels-lang") || "zh";
+
+    const copy = {
+      zh: {
+        heroSubtitle: "上傳原始影片，自動剪停頓、上雙語字幕、產生 IG Reels 壓縮版與封面。",
+        uploadTitle: "上傳影片",
+        uploadHint: "建議上傳原始 MOV 或 MP4。輸出會直接壓成手機好傳、適合 IG Reels 的版本。",
+        chooseFile: "選擇檔案",
+        startButton: "開始自動剪輯",
+        noFile: "尚未選擇檔案",
+        ready: "準備中",
+        uploading: "上傳中",
+        uploadFailed: "上傳失敗",
+        processing: "處理中：剪停頓、字幕、封面、IG 壓縮",
+        failed: "處理失敗",
+        done: "完成",
+        openVideo: "開啟 Reels 影片",
+        openCover: "開啟封面",
+        memoryTitle: "已寫進程式的記憶",
+        memoryTitleLabel: "標題",
+        memorySubtitleLabel: "字幕",
+        memorySubtitleValue: "繁中 + 英文、置中、安全區",
+        memoryZhSpacing: "中文字距",
+        memoryEnSize: "英文字級",
+        memorySize: "輸出尺寸",
+        memoryBitrate: "影片碼率",
+        memoryCoverLabel: "封面",
+        memoryCoverValue: "白字 + 黃字 Reels 風格"
+      },
+      en: {
+        heroSubtitle: "Upload raw footage and automatically remove pauses, add bilingual subtitles, and export a compressed IG Reels video with a cover.",
+        uploadTitle: "Upload Video",
+        uploadHint: "Upload the original MOV or MP4. The output is compressed for phone transfer and Instagram Reels.",
+        chooseFile: "Choose File",
+        startButton: "Start Auto Edit",
+        noFile: "No file selected",
+        ready: "Ready",
+        uploading: "Uploading",
+        uploadFailed: "Upload failed",
+        processing: "Processing: pauses, subtitles, cover, IG compression",
+        failed: "Processing failed",
+        done: "Done",
+        openVideo: "Open Reels Video",
+        openCover: "Open Cover",
+        memoryTitle: "Saved Editing Preferences",
+        memoryTitleLabel: "Title",
+        memorySubtitleLabel: "Subtitles",
+        memorySubtitleValue: "Traditional Chinese + English, centered, safe area",
+        memoryZhSpacing: "Chinese spacing",
+        memoryEnSize: "English size",
+        memorySize: "Output size",
+        memoryBitrate: "Video bitrate",
+        memoryCoverLabel: "Cover",
+        memoryCoverValue: "Bold white + yellow Reels style"
+      }
+    };
+
+    function t(key) {
+      return copy[currentLang][key] || copy.zh[key] || key;
+    }
+
+    function applyLanguage(lang) {
+      currentLang = lang;
+      localStorage.setItem("reels-lang", lang);
+      document.documentElement.lang = lang === "zh" ? "zh-Hant" : "en";
+      langZh.classList.toggle("active", lang === "zh");
+      langEn.classList.toggle("active", lang === "en");
+      document.querySelectorAll("[data-i18n]").forEach((node) => {
+        node.textContent = t(node.dataset.i18n);
+      });
+      if (!video.files.length) picked.textContent = t("noFile");
+    }
+
+    langZh.addEventListener("click", () => applyLanguage("zh"));
+    langEn.addEventListener("click", () => applyLanguage("en"));
+    chooseFile.addEventListener("click", () => video.click());
+    applyLanguage(currentLang);
+
+    video.addEventListener("change", () => {
+      picked.textContent = video.files[0] ? video.files[0].name : t("noFile");
+    });
+
+    ["dragenter", "dragover"].forEach((eventName) => {
+      drop.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        drop.classList.add("drag");
+      });
+    });
+    ["dragleave", "drop"].forEach((eventName) => {
+      drop.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        drop.classList.remove("drag");
+      });
+    });
+    drop.addEventListener("drop", (event) => {
+      if (event.dataTransfer.files.length) {
+        video.files = event.dataTransfer.files;
+        picked.textContent = video.files[0].name;
+      }
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!video.files.length) return;
+      submit.disabled = true;
+      statusBox.classList.add("show");
+      result.classList.remove("show");
+      result.innerHTML = "";
+      state.textContent = t("uploading");
+      log.textContent = "";
+
+      const data = new FormData();
+      data.append("video", video.files[0]);
+      const response = await fetch("/jobs", { method: "POST", body: data });
+      const created = await response.json();
+      if (!response.ok) {
+        state.innerHTML = `<span class="error">${created.error || t("uploadFailed")}</span>`;
+        submit.disabled = false;
+        return;
+      }
+      poll(created.job_id);
+    });
+
+    async function poll(jobId) {
+      const response = await fetch(`/jobs/${jobId}`);
+      const data = await response.json();
+      log.textContent = data.log || "";
+      log.scrollTop = log.scrollHeight;
+
+      if (data.status === "running") {
+        state.textContent = t("processing");
+        setTimeout(() => poll(jobId), 1800);
+        return;
+      }
+
+      submit.disabled = false;
+      if (data.status === "error") {
+        state.innerHTML = `<span class="error">${data.error || t("failed")}</span>`;
+        return;
+      }
+
+      state.innerHTML = `<span class="ok">${t("done")}</span>`;
+      const videoUrl = `/outputs/${jobId}/${data.result.video}`;
+      const coverUrl = `/outputs/${jobId}/${data.result.cover}`;
+      result.innerHTML = `
+        <a class="download" href="${videoUrl}" target="_blank">${t("openVideo")}</a>
+        <a class="download" href="${coverUrl}" target="_blank">${t("openCover")}</a>
+      `;
+      result.classList.add("show");
+    }
+  </script>
+</body>
+</html>

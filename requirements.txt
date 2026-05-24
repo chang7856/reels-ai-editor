@@ -1,0 +1,4 @@
+flask
+faster-whisper
+opencc-python-reimplemented
+pillow
