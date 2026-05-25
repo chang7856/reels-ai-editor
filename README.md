@@ -14,6 +14,9 @@ A local GUI tool for uploading raw footage, automatically removing pauses, addin
 - 輸出 720 x 1280 的壓縮 Reels MP4
 - 自動產生白字 + 黃字風格封面
 - GUI 支援中文 / English 切換
+- Cover 風格可選：雜誌大標、創作者清爽、高對比爆點
+- 上傳影片限制 10 分鐘
+- 上傳檔、輸出檔、封面與 log 會在 3 小時後清除
 
 - Upload MOV / MP4 / M4V / AVI videos
 - Automatically detect and remove pauses
@@ -23,6 +26,9 @@ A local GUI tool for uploading raw footage, automatically removing pauses, addin
 - Export a compressed 720 x 1280 Reels MP4
 - Generate a bold white + yellow cover image
 - Switch the GUI between Chinese and English
+- Choose from three cover styles: Editorial Bold, Clean Creator, High Contrast Hook
+- Limit uploads to 10 minutes
+- Clean up uploads, outputs, covers, and logs after 3 hours
 
 ## 啟動 / Run
 
@@ -67,6 +73,42 @@ Each job is written to `outputs/<job-id>/`:
 - `subtitles.ass`: 字幕檔 / subtitle file
 - `result.json`: 任務結果 / job metadata
 - `run.log`: 處理紀錄 / processing log
+
+## 免費網站方案 / Free Website Option
+
+最省錢且可用的方案是 local-first：
+
+The most practical free setup is local-first:
+
+1. 在自己的 Mac / PC 跑這個 Flask app。
+2. 需要讓別人上傳時，用 Cloudflare Tunnel 免費把本機 `http://127.0.0.1:5057` 暫時公開。
+3. 所有影片仍存在自己的電腦，3 小時後自動刪除，不需要付雲端儲存或轉檔費。
+
+1. Run this Flask app on your own Mac / PC.
+2. If others need access, expose `http://127.0.0.1:5057` temporarily with the free Cloudflare Tunnel.
+3. Videos still stay on your machine and are deleted after 3 hours, so there are no cloud storage or transcoding bills.
+
+Public free hosting is not recommended for long video processing because Whisper + FFmpeg need CPU time, memory, and storage. A free serverless platform usually cannot safely process 10-minute videos.
+
+不建議直接用免費 serverless hosting 跑長影片，因為 Whisper + FFmpeg 需要 CPU、記憶體與暫存空間；多數免費平台不適合安全地處理 10 分鐘影片。
+
+## 安全限制 / Security Constraints
+
+- 只允許 `.mp4`、`.mov`、`.m4v`
+- 上傳後先用 FFprobe 驗證影片長度
+- 影片超過 10 分鐘會被拒絕
+- 檔名會經過清理，不使用使用者原始路徑
+- 上傳檔案權限設為本機使用者可讀寫
+- 每次讀取頁面、建立任務或下載檔案時會清理超過 3 小時的資料
+- 不接受可執行檔、壓縮檔或任意副檔名
+
+- Only `.mp4`, `.mov`, and `.m4v` are allowed
+- FFprobe validates video duration before processing
+- Videos longer than 10 minutes are rejected
+- Filenames are sanitized; user-provided paths are never trusted
+- Uploaded files are restricted to local-user read/write permissions
+- Data older than 3 hours is cleaned up when the app is used
+- Executables, archives, and arbitrary extensions are rejected
 
 ## 程式記憶 / Editing Memory
 

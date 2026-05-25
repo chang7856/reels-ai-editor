@@ -27,8 +27,13 @@ def run(cmd, capture=False):
     return None
 
 
-def load_memory():
-    return json.loads(MEMORY.read_text())
+def load_memory(options_path=None):
+    memory = json.loads(MEMORY.read_text())
+    if options_path and Path(options_path).exists():
+        memory["runtime_options"] = json.loads(Path(options_path).read_text())
+    else:
+        memory["runtime_options"] = {}
+    return memory
 
 
 def ffprobe_duration(video):
@@ -355,32 +360,66 @@ def make_cover(video, output, memory):
         str(frame),
     ])
     cover = memory["cover"]
+    style = memory.get("runtime_options", {}).get("cover_style", cover.get("default_style", "editorial"))
     im = Image.open(frame).convert("RGB")
     im = ImageEnhance.Contrast(im).enhance(1.08)
     im = ImageEnhance.Color(im).enhance(1.05).convert("RGBA")
     overlay = Image.new("RGBA", im.size, (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
-    od.rectangle([0, 0, 720, 360], fill=(0, 0, 0, 92))
-    od.rectangle([0, 840, 720, 1280], fill=(0, 0, 0, 122))
+    if style == "creator":
+        od.rectangle([0, 0, 720, 300], fill=(255, 255, 255, 72))
+        od.rectangle([0, 900, 720, 1280], fill=(0, 0, 0, 102))
+    elif style == "high_contrast":
+        od.rectangle([0, 0, 720, 390], fill=(0, 0, 0, 140))
+        od.rectangle([0, 805, 720, 1280], fill=(0, 0, 0, 165))
+    else:
+        od.rectangle([0, 0, 720, 360], fill=(0, 0, 0, 92))
+        od.rectangle([0, 840, 720, 1280], fill=(0, 0, 0, 122))
     im = Image.alpha_composite(im, overlay)
     draw = ImageDraw.Draw(im)
-    font_pov = ImageFont.truetype(FONT_EN, 36)
-    font_big = ImageFont.truetype(FONT_ZH, 54)
-    font_mid = ImageFont.truetype(FONT_ZH, 43)
-    font_en = ImageFont.truetype(FONT_EN, 28)
+    if style == "creator":
+        font_pov = ImageFont.truetype(FONT_EN, 31)
+        font_big = ImageFont.truetype(FONT_ZH, 48)
+        font_mid = ImageFont.truetype(FONT_ZH, 39)
+        font_en = ImageFont.truetype(FONT_EN, 25)
+    elif style == "high_contrast":
+        font_pov = ImageFont.truetype(FONT_EN, 40)
+        font_big = ImageFont.truetype(FONT_ZH, 58)
+        font_mid = ImageFont.truetype(FONT_ZH, 48)
+        font_en = ImageFont.truetype(FONT_EN, 29)
+    else:
+        font_pov = ImageFont.truetype(FONT_EN, 36)
+        font_big = ImageFont.truetype(FONT_ZH, 54)
+        font_mid = ImageFont.truetype(FONT_ZH, 43)
+        font_en = ImageFont.truetype(FONT_EN, 28)
     white = (255, 255, 255, 255)
     yellow = (247, 218, 83, 255)
-    draw_centered(draw, cover["top_label"], 118, font_pov, white, 3)
-    draw_centered(draw, cover["main_line_1"], 165, font_big, white, 4)
-    draw_centered(draw, cover["main_line_2"], 235, font_big, yellow, 4)
-    draw_centered(draw, cover["english_line"], 315, font_en, white, 2)
-    draw_centered(draw, cover["bottom_line_1"], 895, font_mid, white, 4)
-    draw_centered(draw, cover["bottom_line_2"], 955, font_mid, yellow, 4)
+    if style == "creator":
+        draw_centered(draw, cover["top_label"], 98, font_pov, (20, 24, 31, 255), 1)
+        draw_centered(draw, cover["main_line_1"], 145, font_big, (20, 24, 31, 255), 2)
+        draw_centered(draw, cover["main_line_2"], 208, font_big, yellow, 3)
+        draw_centered(draw, cover["english_line"], 276, font_en, (20, 24, 31, 255), 1)
+        draw_centered(draw, cover["bottom_line_1"], 930, font_mid, white, 4)
+        draw_centered(draw, cover["bottom_line_2"], 986, font_mid, yellow, 4)
+    elif style == "high_contrast":
+        draw_centered(draw, cover["top_label"], 112, font_pov, yellow, 4)
+        draw_centered(draw, cover["main_line_1"], 166, font_big, white, 5)
+        draw_centered(draw, cover["main_line_2"], 242, font_big, yellow, 5)
+        draw_centered(draw, cover["english_line"], 330, font_en, white, 3)
+        draw_centered(draw, cover["bottom_line_1"], 878, font_mid, white, 5)
+        draw_centered(draw, cover["bottom_line_2"], 946, font_mid, yellow, 5)
+    else:
+        draw_centered(draw, cover["top_label"], 118, font_pov, white, 3)
+        draw_centered(draw, cover["main_line_1"], 165, font_big, white, 4)
+        draw_centered(draw, cover["main_line_2"], 235, font_big, yellow, 4)
+        draw_centered(draw, cover["english_line"], 315, font_en, white, 2)
+        draw_centered(draw, cover["bottom_line_1"], 895, font_mid, white, 4)
+        draw_centered(draw, cover["bottom_line_2"], 955, font_mid, yellow, 4)
     im.convert("RGB").save(output, quality=92)
 
 
-def process_video(source, job_dir):
-    memory = load_memory()
+def process_video(source, job_dir, options_path=None):
+    memory = load_memory(options_path)
     job_dir.mkdir(parents=True, exist_ok=True)
     input_video = job_dir / ("input" + Path(source).suffix.lower())
     if Path(source).resolve() != input_video.resolve():
@@ -411,6 +450,7 @@ def process_video(source, job_dir):
         "cover": cover.name,
         "duration_seconds": round(timeline[-1]["dst_end"] if timeline else 0, 2),
         "pieces": len(pieces),
+        "cover_style": memory.get("runtime_options", {}).get("cover_style", memory["cover"].get("default_style")),
         "memory": memory,
     }
     (job_dir / "result.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2))
@@ -419,10 +459,11 @@ def process_video(source, job_dir):
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: python3 reels_gui_pipeline.py INPUT_VIDEO OUTPUT_DIR", file=sys.stderr)
+    if len(sys.argv) not in {3, 4}:
+        print("Usage: python3 reels_gui_pipeline.py INPUT_VIDEO OUTPUT_DIR [OPTIONS_JSON]", file=sys.stderr)
         raise SystemExit(2)
-    result = process_video(Path(sys.argv[1]), Path(sys.argv[2]))
+    options_path = Path(sys.argv[3]) if len(sys.argv) == 4 else None
+    result = process_video(Path(sys.argv[1]), Path(sys.argv[2]), options_path)
     print(json.dumps(result, ensure_ascii=False))
 
 

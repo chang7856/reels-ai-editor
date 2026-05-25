@@ -35,12 +35,33 @@
   },
   "cover": {
     "enabled": true,
+    "default_style": "editorial",
     "style": "bold white/yellow IG Reels cover",
     "top_label": "POV",
     "main_line_1": "全自動化 AI",
     "main_line_2": "小編跟廣告",
     "english_line": "AI editor + ads on autopilot",
     "bottom_line_1": "小團隊也能",
-    "bottom_line_2": "跑出一整套自動化"
+    "bottom_line_2": "跑出一整套自動化",
+    "styles": {
+      "editorial": {
+        "name_zh": "雜誌大標",
+        "name_en": "Editorial Bold",
+        "description_zh": "白字加黃色重點，最像知識型 Reels 封面。",
+        "description_en": "White type with yellow emphasis for knowledge-style Reels."
+      },
+      "creator": {
+        "name_zh": "創作者清爽",
+        "name_en": "Clean Creator",
+        "description_zh": "留更多臉部空間，字體更乾淨，適合個人品牌。",
+        "description_en": "More face space and cleaner typography for personal brands."
+      },
+      "high_contrast": {
+        "name_zh": "高對比爆點",
+        "name_en": "High Contrast Hook",
+        "description_zh": "更強陰影和底部 hook，適合想提高停留率。",
+        "description_en": "Stronger contrast and bottom hook for scroll-stopping thumbnails."
+      }
+    }
   }
 }
