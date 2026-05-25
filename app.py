@@ -68,6 +68,41 @@ def video_duration(path):
     return float(result.stdout.strip())
 
 
+def processing_progress(log, status, result, started_at, duration):
+    if status == "done" and result:
+        return {
+            "percent": 100,
+            "stage": "done",
+            "eta_seconds": 0,
+            "elapsed_seconds": max(0, int(time.time() - started_at)),
+        }
+
+    stage, percent = "validate", 28
+    if "7/7" in log:
+        stage, percent = "render", 94
+    elif "6/7" in log:
+        stage, percent = "render", 88
+    elif "5/7" in log:
+        stage, percent = "render", 78
+    elif "4/7" in log:
+        stage, percent = "render", 68
+    elif "3/7" in log:
+        stage, percent = "transcribe", 48
+    elif "2/7" in log or "1/7" in log:
+        stage, percent = "validate", 28
+
+    elapsed = max(1, int(time.time() - started_at))
+    baseline = max(90, min(45 * 60, int((duration or 60) * 3.2)))
+    estimated_total = max(baseline, int(elapsed / max(percent, 1) * 100))
+    eta = max(0, estimated_total - elapsed)
+    return {
+        "percent": min(percent, 96),
+        "stage": stage,
+        "eta_seconds": eta,
+        "elapsed_seconds": elapsed,
+    }
+
+
 @app.get("/")
 def index():
     cleanup_old_files()
@@ -109,6 +144,7 @@ def create_job():
         "original_filename": original_name,
         "duration_seconds": duration,
         "delete_after_hours": 3,
+        "started_at": time.time(),
     }, ensure_ascii=False, indent=2))
 
     log_path = job_dir / "run.log"
@@ -119,8 +155,14 @@ def create_job():
         stderr=subprocess.STDOUT,
         cwd=str(ROOT),
     )
-    jobs[job_id] = {"process": process, "dir": job_dir, "log": log_path}
-    return jsonify({"job_id": job_id})
+    jobs[job_id] = {
+        "process": process,
+        "dir": job_dir,
+        "log": log_path,
+        "started_at": time.time(),
+        "duration_seconds": duration,
+    }
+    return jsonify({"job_id": job_id, "duration_seconds": duration})
 
 
 @app.get("/jobs/<job_id>")
@@ -140,12 +182,18 @@ def job_status(job_id):
         error = "處理失敗，請看 log。"
     result = json.loads(result_path.read_text()) if result_path.exists() else None
     log = log_path.read_text(errors="ignore")[-8000:] if log_path.exists() else ""
+    options_path = job_dir / "options.json"
+    options = json.loads(options_path.read_text()) if options_path.exists() else {}
+    started_at = job.get("started_at") if job else options.get("started_at", job_dir.stat().st_mtime)
+    duration = job.get("duration_seconds") if job else options.get("duration_seconds", 60)
+    progress = processing_progress(log, status, result, started_at, duration)
     return jsonify({
         "job_id": job_id,
         "status": status,
         "error": error,
         "log": log,
         "result": result,
+        "progress": progress,
     })
 
 

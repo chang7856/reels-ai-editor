@@ -357,6 +357,74 @@
       animation: none;
       transition: width .18s ease;
     }
+    .processing-card {
+      display: none;
+      grid-template-columns: 58px minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      margin: 14px 0;
+      padding: 15px;
+      border: 1px solid rgba(47, 127, 117, .22);
+      border-radius: 8px;
+      background:
+        linear-gradient(135deg, rgba(244, 207, 79, .18), rgba(255, 255, 255, .9) 44%),
+        linear-gradient(225deg, rgba(47, 127, 117, .13), transparent 48%);
+    }
+    .processing-card.show { display: grid; }
+    .loader {
+      width: 48px;
+      height: 48px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: conic-gradient(from 0deg, var(--teal), var(--accent), var(--coral), var(--teal));
+      animation: spin 1.15s linear infinite;
+      box-shadow: 0 10px 28px rgba(47, 127, 117, .16);
+    }
+    .loader::after {
+      content: "";
+      width: 34px;
+      height: 34px;
+      border-radius: inherit;
+      background: #fff;
+      box-shadow: inset 0 0 0 1px rgba(21, 23, 28, .08);
+    }
+    .processing-title {
+      color: var(--ink);
+      font-size: 16px;
+      font-weight: 950;
+      line-height: 1.25;
+    }
+    .processing-detail {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+    .processing-percent {
+      min-width: 70px;
+      color: var(--teal);
+      font-size: 28px;
+      font-weight: 950;
+      text-align: right;
+    }
+    .time-row {
+      display: none;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 0 0 13px;
+    }
+    .time-row.show { display: grid; }
+    .time-chip {
+      padding: 10px 12px;
+      border: 1px solid #edf0f3;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .78);
+      color: #3f4650;
+      font-size: 13px;
+      font-weight: 850;
+    }
     .stage-list {
       display: grid;
       gap: 8px;
@@ -424,6 +492,9 @@
     @keyframes pulse {
       from { width: 18%; }
       to { width: 92%; }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
     pre {
       max-height: 220px;
@@ -543,6 +614,9 @@
       .cover-grid { grid-template-columns: 1fr; }
       .file-card.show { grid-template-columns: 44px minmax(0, 1fr); }
       .file-state { grid-column: 1 / -1; justify-self: start; }
+      .processing-card { grid-template-columns: 48px minmax(0, 1fr); }
+      .processing-percent { grid-column: 1 / -1; text-align: left; font-size: 24px; }
+      .time-row { grid-template-columns: 1fr; }
       footer { display: block; }
     }
   </style>
@@ -619,6 +693,18 @@
         <div id="status" class="status">
           <div id="state" class="hint" data-i18n="ready">準備中</div>
           <div id="progressBar" class="bar"><span></span></div>
+          <div id="processingCard" class="processing-card" aria-live="polite">
+            <div class="loader" aria-hidden="true"></div>
+            <div>
+              <div id="processingTitle" class="processing-title" data-i18n="processingTitle">正在整理你的 Reels</div>
+              <div id="processingDetail" class="processing-detail" data-i18n="processingDetail">剛收到影片，正在準備分析。</div>
+            </div>
+            <div id="processingPercent" class="processing-percent">0%</div>
+          </div>
+          <div id="timeRow" class="time-row">
+            <div id="elapsedTime" class="time-chip"></div>
+            <div id="etaTime" class="time-chip"></div>
+          </div>
           <div class="stage-list" aria-live="polite">
             <div class="stage" data-stage="upload"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageUpload">上傳影片</span></span><span id="uploadPct">0%</span></div>
             <div class="stage" data-stage="validate"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageValidate">檢查格式與長度</span></span></div>
@@ -683,6 +769,13 @@
     const errorCard = document.getElementById("errorCard");
     const errorTitle = document.getElementById("errorTitle");
     const errorHelp = document.getElementById("errorHelp");
+    const processingCard = document.getElementById("processingCard");
+    const processingTitle = document.getElementById("processingTitle");
+    const processingDetail = document.getElementById("processingDetail");
+    const processingPercent = document.getElementById("processingPercent");
+    const timeRow = document.getElementById("timeRow");
+    const elapsedTime = document.getElementById("elapsedTime");
+    const etaTime = document.getElementById("etaTime");
     const drop = document.getElementById("drop");
     const chooseFile = document.getElementById("chooseFile");
     const fileCard = document.getElementById("fileCard");
@@ -722,6 +815,16 @@
         uploadFailed: "上傳失敗",
         uploadProgress: "上傳中",
         processing: "處理中：剪停頓、字幕、封面、IG 壓縮",
+        processingTitle: "正在整理你的 Reels",
+        processingDetail: "剛收到影片，正在準備分析。",
+        processingUploadDetail: "影片正在傳到本機工作區。",
+        processingValidateDetail: "正在確認影片長度、格式與安全限制。",
+        processingTranscribeDetail: "正在聽內容、轉成字幕並準備雙語排版。",
+        processingRenderDetail: "正在剪掉贅字與停頓，輸出壓縮 Reels 與封面。",
+        processingDoneDetail: "影片與封面都完成了。",
+        elapsedLabel: "已花",
+        etaLabel: "預估剩餘",
+        etaPending: "計算中",
         failed: "處理失敗",
         done: "完成",
         stageUpload: "上傳影片",
@@ -788,6 +891,16 @@
         uploadFailed: "Upload failed",
         uploadProgress: "Uploading",
         processing: "Processing: pauses, subtitles, cover, IG compression",
+        processingTitle: "Preparing your Reel",
+        processingDetail: "Video received. Analysis is starting.",
+        processingUploadDetail: "Uploading the video into the local workspace.",
+        processingValidateDetail: "Checking duration, format, and safety rules.",
+        processingTranscribeDetail: "Listening to the content and preparing bilingual subtitles.",
+        processingRenderDetail: "Removing filler, cutting pauses, and exporting the compressed Reel and cover.",
+        processingDoneDetail: "The video and cover are ready.",
+        elapsedLabel: "Elapsed",
+        etaLabel: "Estimated left",
+        etaPending: "calculating",
         failed: "Processing failed",
         done: "Done",
         stageUpload: "Upload video",
@@ -859,6 +972,49 @@
       }
     }
 
+    function formatDuration(seconds) {
+      if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) {
+        return t("etaPending");
+      }
+      const total = Math.max(0, Math.round(Number(seconds)));
+      const minutes = Math.floor(total / 60);
+      const remainingSeconds = total % 60;
+      return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+    }
+
+    function stageDetail(stage) {
+      const details = {
+        upload: "processingUploadDetail",
+        validate: "processingValidateDetail",
+        transcribe: "processingTranscribeDetail",
+        render: "processingRenderDetail",
+        done: "processingDoneDetail"
+      };
+      return t(details[stage] || "processingDetail");
+    }
+
+    function showProcessing(progress = {}) {
+      const percent = Math.max(0, Math.min(100, Number(progress.percent || 0)));
+      const stage = progress.stage || "validate";
+      processingCard.classList.add("show");
+      timeRow.classList.add("show");
+      processingTitle.textContent = t("processingTitle");
+      processingDetail.textContent = stageDetail(stage);
+      processingPercent.textContent = `${Math.round(percent)}%`;
+      elapsedTime.textContent = `${t("elapsedLabel")} ${formatDuration(progress.elapsed_seconds || 0)}`;
+      etaTime.textContent = `${t("etaLabel")} ${formatDuration(progress.eta_seconds)}`;
+      setProgress(percent, "determinate");
+      setStage(stage);
+    }
+
+    function hideProcessing() {
+      processingCard.classList.remove("show");
+      timeRow.classList.remove("show");
+      processingPercent.textContent = "0%";
+      elapsedTime.textContent = "";
+      etaTime.textContent = "";
+    }
+
     function setStage(activeStage) {
       const order = ["upload", "validate", "transcribe", "render"];
       document.querySelectorAll(".stage").forEach((node) => {
@@ -878,6 +1034,7 @@
     function resetProgressUi() {
       statusBox.classList.remove("show");
       clearError();
+      hideProcessing();
       setProgress(0, "determinate");
       uploadPct.textContent = "0%";
       log.textContent = "";
@@ -894,6 +1051,7 @@
       errorCard.classList.add("show");
       log.classList.add("log-hidden");
       state.innerHTML = `<span class="error">${message || t("failed")}</span>`;
+      hideProcessing();
       setProgress(0, "determinate");
       submit.disabled = false;
     }
@@ -979,6 +1137,7 @@
           state.textContent = `${t("uploadProgress")} ${percent}%`;
           setProgress(percent, "determinate");
           setStage("upload");
+          showProcessing({ percent, stage: "upload", elapsed_seconds: 0, eta_seconds: null });
         };
         xhr.onload = () => {
           let payload = {};
@@ -1043,6 +1202,7 @@
       result.classList.remove("show");
       result.innerHTML = "";
       clearError();
+      hideProcessing();
       setStage("upload");
       setProgress(0, "determinate");
       uploadPct.textContent = "0%";
@@ -1065,21 +1225,36 @@
       }
       state.textContent = t("processing");
       uploadPct.textContent = "100%";
-      setProgress(0, "indeterminate");
-      setStage("validate");
+      showProcessing({ percent: 28, stage: "validate", elapsed_seconds: 0, eta_seconds: null });
       poll(created.job_id);
     });
 
     async function poll(jobId) {
-      const response = await fetch(`/jobs/${jobId}`);
-      const data = await response.json();
+      let response;
+      let data;
+      try {
+        response = await fetch(`/jobs/${jobId}`);
+        data = await response.json();
+      } catch (_error) {
+        showError(t("uploadFailed"), "errorNetworkHelp");
+        submit.textContent = t("startButton");
+        return;
+      }
+      if (!response.ok) {
+        showError(data.error || t("failed"), errorHelpKey(data.error, response.status));
+        submit.textContent = t("startButton");
+        return;
+      }
       log.textContent = data.log || "";
       log.classList.toggle("log-hidden", !(data.log || "").trim());
       log.scrollTop = log.scrollHeight;
       updateStageFromLog(data.log || "");
+      if (data.progress) {
+        showProcessing(data.progress);
+      }
 
       if (data.status === "running") {
-        state.textContent = t("processing");
+        state.textContent = `${t("processing")} ${data.progress ? Math.round(data.progress.percent) + "%" : ""}`.trim();
         setTimeout(() => poll(jobId), 1800);
         return;
       }
@@ -1092,6 +1267,7 @@
       }
 
       state.innerHTML = `<span class="ok">${t("done")}</span>`;
+      showProcessing({ percent: 100, stage: "done", elapsed_seconds: data.progress && data.progress.elapsed_seconds, eta_seconds: 0 });
       setProgress(100, "determinate");
       document.querySelectorAll(".stage").forEach((node) => {
         node.classList.remove("active");
