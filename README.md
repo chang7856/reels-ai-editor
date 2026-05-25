@@ -17,6 +17,8 @@ A local GUI tool for uploading raw footage, automatically removing pauses, addin
 - Cover 風格可選：雜誌大標、創作者清爽、高對比爆點
 - 上傳影片限制 10 分鐘
 - 上傳檔、輸出檔、封面與 log 會在 3 小時後清除
+- 上傳時顯示即時進度與處理階段
+- 錯誤會顯示人可以看懂的原因，例如格式不支援、檔案太大、超過 10 分鐘或影片損毀
 
 - Upload MOV / MP4 / M4V / AVI videos
 - Automatically detect and remove pauses
@@ -29,6 +31,8 @@ A local GUI tool for uploading raw footage, automatically removing pauses, addin
 - Choose from three cover styles: Editorial Bold, Clean Creator, High Contrast Hook
 - Limit uploads to 10 minutes
 - Clean up uploads, outputs, covers, and logs after 3 hours
+- Show real-time upload progress and processing stages
+- Explain upload errors clearly, including unsupported format, oversized file, videos over 10 minutes, or unreadable media
 
 ## 啟動 / Run
 

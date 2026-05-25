@@ -7,6 +7,7 @@ import uuid
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
+from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 
 
@@ -31,6 +32,14 @@ ALLOWED_COVER_STYLES = {"editorial", "creator", "high_contrast"}
 
 def allowed(filename):
     return Path(filename).suffix.lower() in ALLOWED_EXTENSIONS
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def file_too_large(_error):
+    return jsonify({
+        "error": "檔案太大，請上傳 1.2GB 以下、10 分鐘內的影片。",
+        "code": "file_too_large",
+    }), 413
 
 
 def cleanup_old_files():

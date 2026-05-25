@@ -288,6 +288,75 @@
       background: linear-gradient(90deg, var(--accent), var(--coral));
       animation: pulse 1.25s ease-in-out infinite alternate;
     }
+    .bar.determinate span {
+      width: var(--progress, 0%);
+      animation: none;
+      transition: width .18s ease;
+    }
+    .stage-list {
+      display: grid;
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .stage {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 11px;
+      border: 1px solid #edf0f3;
+      border-radius: 8px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .stage.active {
+      border-color: rgba(47, 127, 117, .34);
+      background: var(--wash);
+      color: var(--teal);
+    }
+    .stage.done {
+      color: var(--ok);
+    }
+    .stage-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: #cbd5e1;
+      flex: 0 0 auto;
+    }
+    .stage.active .stage-dot {
+      background: var(--teal);
+    }
+    .stage.done .stage-dot {
+      background: var(--ok);
+    }
+    .stage-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .error-card {
+      display: none;
+      margin-top: 12px;
+      padding: 14px;
+      border: 1px solid rgba(180, 35, 24, .24);
+      border-left: 5px solid var(--bad);
+      border-radius: 8px;
+      background: #fff7f6;
+    }
+    .error-card.show { display: block; }
+    .error-title {
+      color: var(--bad);
+      font-weight: 900;
+      margin-bottom: 4px;
+    }
+    .error-help {
+      color: #7a2e27;
+      font-size: 13px;
+      line-height: 1.45;
+    }
     @keyframes pulse {
       from { width: 18%; }
       to { width: 92%; }
@@ -303,6 +372,7 @@
       line-height: 1.45;
       white-space: pre-wrap;
     }
+    .log-hidden { display: none; }
     .result {
       display: none;
       margin-top: 16px;
@@ -431,7 +501,7 @@
           <h2 data-i18n="uploadTitle">上傳與輸出設定</h2>
           <span class="badge" data-i18n="freeBadge">Free local mode</span>
         </div>
-        <form id="form">
+        <form id="form" novalidate>
           <div class="drop" id="drop">
             <div>
               <input id="video" name="video" type="file" accept="video/mp4,video/quicktime,video/x-m4v">
@@ -475,8 +545,18 @@
 
         <div id="status" class="status">
           <div id="state" class="hint" data-i18n="ready">準備中</div>
-          <div class="bar"><span></span></div>
-          <pre id="log"></pre>
+          <div id="progressBar" class="bar"><span></span></div>
+          <div class="stage-list" aria-live="polite">
+            <div class="stage" data-stage="upload"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageUpload">上傳影片</span></span><span id="uploadPct">0%</span></div>
+            <div class="stage" data-stage="validate"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageValidate">檢查格式與長度</span></span></div>
+            <div class="stage" data-stage="transcribe"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageTranscribe">轉錄與翻譯</span></span></div>
+            <div class="stage" data-stage="render"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageRender">剪輯與輸出</span></span></div>
+          </div>
+          <div id="errorCard" class="error-card">
+            <div id="errorTitle" class="error-title"></div>
+            <div id="errorHelp" class="error-help"></div>
+          </div>
+          <pre id="log" class="log-hidden"></pre>
           <div id="result" class="result"></div>
         </div>
       </section>
@@ -526,6 +606,11 @@
     const state = document.getElementById("state");
     const log = document.getElementById("log");
     const result = document.getElementById("result");
+    const progressBar = document.getElementById("progressBar");
+    const uploadPct = document.getElementById("uploadPct");
+    const errorCard = document.getElementById("errorCard");
+    const errorTitle = document.getElementById("errorTitle");
+    const errorHelp = document.getElementById("errorHelp");
     const drop = document.getElementById("drop");
     const chooseFile = document.getElementById("chooseFile");
     const langZh = document.getElementById("langZh");
@@ -554,9 +639,22 @@
         ready: "準備中",
         uploading: "上傳中",
         uploadFailed: "上傳失敗",
+        uploadProgress: "上傳中",
         processing: "處理中：剪停頓、字幕、封面、IG 壓縮",
         failed: "處理失敗",
         done: "完成",
+        stageUpload: "上傳影片",
+        stageValidate: "檢查格式與長度",
+        stageTranscribe: "轉錄與翻譯",
+        stageRender: "剪輯與輸出",
+        errorTitle: "無法完成這次上傳",
+        errorGenericHelp: "請確認檔案是 10 分鐘內的 MP4、MOV 或 M4V 影片，再重新上傳。",
+        errorNetworkHelp: "連線中斷或伺服器沒有回應。請確認本機 GUI 還在執行，然後再試一次。",
+        errorNoFileHelp: "請先選擇一支影片，再開始自動剪輯。",
+        errorFileTypeHelp: "這個格式目前不支援。請改用 .mp4、.mov 或 .m4v。",
+        errorTooLongHelp: "影片超過 10 分鐘。請先剪短後再上傳。",
+        errorTooLargeHelp: "檔案超過上限。請先壓縮到 1.2GB 以下，並確認影片少於 10 分鐘。",
+        errorUnreadableHelp: "伺服器讀不到影片資訊，可能是檔案損毀或不是標準影片容器。",
         openVideo: "開啟 Reels 影片",
         openCover: "開啟封面",
         rulesTitle: "上傳規則與資安",
@@ -601,9 +699,22 @@
         ready: "Ready",
         uploading: "Uploading",
         uploadFailed: "Upload failed",
+        uploadProgress: "Uploading",
         processing: "Processing: pauses, subtitles, cover, IG compression",
         failed: "Processing failed",
         done: "Done",
+        stageUpload: "Upload video",
+        stageValidate: "Check format and duration",
+        stageTranscribe: "Transcribe and translate",
+        stageRender: "Edit and export",
+        errorTitle: "This upload could not be completed",
+        errorGenericHelp: "Please upload an MP4, MOV, or M4V video under 10 minutes and try again.",
+        errorNetworkHelp: "The connection dropped or the local server did not respond. Make sure the GUI is still running, then try again.",
+        errorNoFileHelp: "Choose a video before starting the auto edit.",
+        errorFileTypeHelp: "This format is not supported. Please use .mp4, .mov, or .m4v.",
+        errorTooLongHelp: "The video is longer than 10 minutes. Please trim it before uploading.",
+        errorTooLargeHelp: "The file is over the limit. Compress it below 1.2GB and keep it under 10 minutes.",
+        errorUnreadableHelp: "The server could not read the video metadata. The file may be damaged or not a standard video container.",
         openVideo: "Open Reels Video",
         openCover: "Open Cover",
         rulesTitle: "Upload Rules & Security",
@@ -650,6 +761,116 @@
     chooseFile.addEventListener("click", () => video.click());
     applyLanguage(currentLang);
 
+    function setProgress(value, mode = "determinate") {
+      if (mode === "determinate") {
+        progressBar.classList.add("determinate");
+        progressBar.style.setProperty("--progress", `${Math.max(0, Math.min(100, value))}%`);
+      } else {
+        progressBar.classList.remove("determinate");
+        progressBar.style.removeProperty("--progress");
+      }
+    }
+
+    function setStage(activeStage) {
+      const order = ["upload", "validate", "transcribe", "render"];
+      document.querySelectorAll(".stage").forEach((node) => {
+        const index = order.indexOf(node.dataset.stage);
+        const activeIndex = order.indexOf(activeStage);
+        node.classList.toggle("active", node.dataset.stage === activeStage);
+        node.classList.toggle("done", activeIndex > index);
+      });
+    }
+
+    function clearError() {
+      errorCard.classList.remove("show");
+      errorTitle.textContent = "";
+      errorHelp.textContent = "";
+    }
+
+    function showError(message, helpKey) {
+      statusBox.classList.add("show");
+      errorTitle.textContent = message || t("errorTitle");
+      errorHelp.textContent = t(helpKey || "errorGenericHelp");
+      errorCard.classList.add("show");
+      log.classList.add("log-hidden");
+      state.innerHTML = `<span class="error">${message || t("failed")}</span>`;
+      setProgress(0, "determinate");
+      submit.disabled = false;
+    }
+
+    function validateSelectedFile(file) {
+      if (!file) {
+        showError(t("uploadFailed"), "errorNoFileHelp");
+        return false;
+      }
+      const lowerName = file.name.toLowerCase();
+      const okType = [".mp4", ".mov", ".m4v"].some((ext) => lowerName.endsWith(ext));
+      if (!okType) {
+        showError(t("uploadFailed"), "errorFileTypeHelp");
+        return false;
+      }
+      const maxBytes = 1.2 * 1024 * 1024 * 1024;
+      if (file.size > maxBytes) {
+        showError(t("uploadFailed"), "errorTooLargeHelp");
+        return false;
+      }
+      return true;
+    }
+
+    function errorHelpKey(message, status) {
+      const text = (message || "").toLowerCase();
+      if (status === 413 || text.includes("太大") || text.includes("too large")) return "errorTooLargeHelp";
+      if (text.includes("10 分鐘") || text.includes("10 minutes")) return "errorTooLongHelp";
+      if (text.includes("支援") || text.includes("format") || text.includes("副檔名")) return "errorFileTypeHelp";
+      if (text.includes("無法讀取") || text.includes("損毀") || text.includes("metadata")) return "errorUnreadableHelp";
+      return "errorGenericHelp";
+    }
+
+    function uploadJob(data) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/jobs");
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) {
+            state.textContent = t("uploading");
+            setProgress(0, "indeterminate");
+            return;
+          }
+          const percent = Math.round((event.loaded / event.total) * 100);
+          uploadPct.textContent = `${percent}%`;
+          state.textContent = `${t("uploadProgress")} ${percent}%`;
+          setProgress(percent, "determinate");
+          setStage("upload");
+        };
+        xhr.onload = () => {
+          let payload = {};
+          try {
+            payload = JSON.parse(xhr.responseText || "{}");
+          } catch (_error) {
+            payload = {};
+          }
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(payload);
+          } else {
+            reject({ status: xhr.status, payload });
+          }
+        };
+        xhr.onerror = () => reject({ status: 0, payload: { error: t("uploadFailed") }, network: true });
+        xhr.onabort = () => reject({ status: 0, payload: { error: t("uploadFailed") }, network: true });
+        xhr.send(data);
+      });
+    }
+
+    function updateStageFromLog(text) {
+      if (text.includes("5/7") || text.includes("6/7") || text.includes("7/7")) {
+        setStage("render");
+      } else if (text.includes("3/7")) {
+        setStage("transcribe");
+      } else if (text.includes("2/7") || text.includes("1/7")) {
+        setStage("validate");
+      }
+    }
+
     video.addEventListener("change", () => {
       picked.textContent = video.files[0] ? video.files[0].name : t("noFile");
     });
@@ -675,25 +896,35 @@
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!video.files.length) return;
+      if (!validateSelectedFile(video.files[0])) return;
       submit.disabled = true;
       statusBox.classList.add("show");
       result.classList.remove("show");
       result.innerHTML = "";
+      clearError();
+      setStage("upload");
+      setProgress(0, "determinate");
+      uploadPct.textContent = "0%";
       state.textContent = t("uploading");
       log.textContent = "";
+      log.classList.add("log-hidden");
 
       const data = new FormData();
       data.append("video", video.files[0]);
       const selectedStyle = document.querySelector("input[name='cover_style']:checked");
       data.append("cover_style", selectedStyle ? selectedStyle.value : "editorial");
-      const response = await fetch("/jobs", { method: "POST", body: data });
-      const created = await response.json();
-      if (!response.ok) {
-        state.innerHTML = `<span class="error">${created.error || t("uploadFailed")}</span>`;
-        submit.disabled = false;
+      let created;
+      try {
+        created = await uploadJob(data);
+      } catch (error) {
+        const message = error.payload && error.payload.error ? error.payload.error : t("uploadFailed");
+        showError(message, error.network ? "errorNetworkHelp" : errorHelpKey(message, error.status));
         return;
       }
+      state.textContent = t("processing");
+      uploadPct.textContent = "100%";
+      setProgress(0, "indeterminate");
+      setStage("validate");
       poll(created.job_id);
     });
 
@@ -701,7 +932,9 @@
       const response = await fetch(`/jobs/${jobId}`);
       const data = await response.json();
       log.textContent = data.log || "";
+      log.classList.toggle("log-hidden", !(data.log || "").trim());
       log.scrollTop = log.scrollHeight;
+      updateStageFromLog(data.log || "");
 
       if (data.status === "running") {
         state.textContent = t("processing");
@@ -711,11 +944,16 @@
 
       submit.disabled = false;
       if (data.status === "error") {
-        state.innerHTML = `<span class="error">${data.error || t("failed")}</span>`;
+        showError(data.error || t("failed"), "errorGenericHelp");
         return;
       }
 
       state.innerHTML = `<span class="ok">${t("done")}</span>`;
+      setProgress(100, "determinate");
+      document.querySelectorAll(".stage").forEach((node) => {
+        node.classList.remove("active");
+        node.classList.add("done");
+      });
       const videoUrl = `/outputs/${jobId}/${data.result.video}`;
       const coverUrl = `/outputs/${jobId}/${data.result.cover}`;
       result.innerHTML = `
