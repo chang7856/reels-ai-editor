@@ -785,6 +785,8 @@
     const langZh = document.getElementById("langZh");
     const langEn = document.getElementById("langEn");
     let currentLang = localStorage.getItem("reels-lang") || "zh";
+    let uploadStartedAt = 0;
+    let serverWaitTimer = null;
 
     const copy = {
       zh: {
@@ -812,6 +814,7 @@
         replaceFile: "更換影片",
         ready: "準備中",
         uploading: "上傳中",
+        validatingUpload: "上傳完成，正在檢查影片",
         uploadFailed: "上傳失敗",
         uploadProgress: "上傳中",
         processing: "處理中：剪停頓、字幕、封面、IG 壓縮",
@@ -888,6 +891,7 @@
         replaceFile: "Replace Video",
         ready: "Ready",
         uploading: "Uploading",
+        validatingUpload: "Upload complete. Checking video",
         uploadFailed: "Upload failed",
         uploadProgress: "Uploading",
         processing: "Processing: pauses, subtitles, cover, IG compression",
@@ -1007,7 +1011,36 @@
       setStage(stage);
     }
 
+    function elapsedSince(timestamp) {
+      if (!timestamp) return 0;
+      return Math.max(0, Math.round((Date.now() - timestamp) / 1000));
+    }
+
+    function clearServerWaitTimer() {
+      if (serverWaitTimer) {
+        clearInterval(serverWaitTimer);
+        serverWaitTimer = null;
+      }
+    }
+
+    function showServerValidationWait() {
+      state.textContent = t("validatingUpload");
+      showProcessing({
+        percent: 28,
+        stage: "validate",
+        elapsed_seconds: elapsedSince(uploadStartedAt),
+        eta_seconds: null
+      });
+    }
+
+    function startServerWaitTimer() {
+      clearServerWaitTimer();
+      showServerValidationWait();
+      serverWaitTimer = setInterval(showServerValidationWait, 1000);
+    }
+
     function hideProcessing() {
+      clearServerWaitTimer();
       processingCard.classList.remove("show");
       timeRow.classList.remove("show");
       processingPercent.textContent = "0%";
@@ -1129,17 +1162,31 @@
         xhr.upload.onprogress = (event) => {
           if (!event.lengthComputable) {
             state.textContent = t("uploading");
-            setProgress(0, "indeterminate");
+            showProcessing({
+              percent: 8,
+              stage: "upload",
+              elapsed_seconds: elapsedSince(uploadStartedAt),
+              eta_seconds: null
+            });
             return;
           }
           const percent = Math.round((event.loaded / event.total) * 100);
+          const workflowPercent = Math.max(1, Math.min(18, Math.round(percent * 0.18)));
           uploadPct.textContent = `${percent}%`;
           state.textContent = `${t("uploadProgress")} ${percent}%`;
-          setProgress(percent, "determinate");
           setStage("upload");
-          showProcessing({ percent, stage: "upload", elapsed_seconds: 0, eta_seconds: null });
+          showProcessing({
+            percent: workflowPercent,
+            stage: "upload",
+            elapsed_seconds: elapsedSince(uploadStartedAt),
+            eta_seconds: null
+          });
+          if (percent >= 100) {
+            startServerWaitTimer();
+          }
         };
         xhr.onload = () => {
+          clearServerWaitTimer();
           let payload = {};
           try {
             payload = JSON.parse(xhr.responseText || "{}");
@@ -1152,8 +1199,14 @@
             reject({ status: xhr.status, payload });
           }
         };
-        xhr.onerror = () => reject({ status: 0, payload: { error: t("uploadFailed") }, network: true });
-        xhr.onabort = () => reject({ status: 0, payload: { error: t("uploadFailed") }, network: true });
+        xhr.onerror = () => {
+          clearServerWaitTimer();
+          reject({ status: 0, payload: { error: t("uploadFailed") }, network: true });
+        };
+        xhr.onabort = () => {
+          clearServerWaitTimer();
+          reject({ status: 0, payload: { error: t("uploadFailed") }, network: true });
+        };
         xhr.send(data);
       });
     }
@@ -1203,6 +1256,7 @@
       result.innerHTML = "";
       clearError();
       hideProcessing();
+      uploadStartedAt = Date.now();
       setStage("upload");
       setProgress(0, "determinate");
       uploadPct.textContent = "0%";
