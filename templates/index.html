@@ -152,6 +152,10 @@
       padding: 26px;
       transition: border-color .15s ease, background .15s ease, transform .15s ease;
     }
+    .drop-inner {
+      width: min(100%, 560px);
+      margin: 0 auto;
+    }
     .drop.drag {
       border-color: #15171c;
       background: #fff8d8;
@@ -179,6 +183,65 @@
       color: #3f4650;
       font-size: 13px;
       font-weight: 800;
+    }
+    .file-card {
+      display: none;
+      margin-top: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .9);
+      padding: 14px;
+      text-align: left;
+    }
+    .file-card.show {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+    }
+    .file-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: #15171c;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .file-name {
+      display: block;
+      max-width: 100%;
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 900;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .file-meta {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .file-state {
+      justify-self: end;
+      min-width: 74px;
+      padding: 7px 9px;
+      border-radius: 999px;
+      background: var(--wash);
+      color: var(--teal);
+      font-size: 12px;
+      font-weight: 900;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .file-state.bad {
+      background: #fff1ef;
+      color: var(--bad);
     }
     .cover-picker {
       margin-top: 20px;
@@ -248,9 +311,10 @@
     .actions {
       display: flex;
       align-items: center;
-      gap: 12px;
       margin-top: 18px;
-      flex-wrap: wrap;
+      justify-content: flex-end;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
     }
     .primary {
       border: 0;
@@ -477,6 +541,8 @@
       h1 { font-size: 38px; }
       .shell { grid-template-columns: 1fr; }
       .cover-grid { grid-template-columns: 1fr; }
+      .file-card.show { grid-template-columns: 44px minmax(0, 1fr); }
+      .file-state { grid-column: 1 / -1; justify-self: start; }
       footer { display: block; }
     }
   </style>
@@ -503,11 +569,19 @@
         </div>
         <form id="form" novalidate>
           <div class="drop" id="drop">
-            <div>
+            <div class="drop-inner">
               <input id="video" name="video" type="file" accept="video/mp4,video/quicktime,video/x-m4v">
               <button class="file-pick" id="chooseFile" type="button" data-i18n="chooseFile">選擇影片</button>
               <p class="hint" data-i18n="uploadHint">支援 MP4 / MOV / M4V，最長 10 分鐘。完成後輸出 Reels 影片與封面，檔案 3 小時後自動刪除。</p>
               <p class="format-line" data-i18n="formatLine">格式限制：.mp4 / .mov / .m4v，不接受可執行檔或壓縮檔。</p>
+              <div id="fileCard" class="file-card" aria-live="polite">
+                <div class="file-icon">MP4</div>
+                <div>
+                  <span id="fileName" class="file-name"></span>
+                  <span id="fileMeta" class="file-meta"></span>
+                </div>
+                <div id="fileState" class="file-state"></div>
+              </div>
             </div>
           </div>
 
@@ -539,7 +613,6 @@
 
           <div class="actions">
             <button class="primary" id="submit" type="submit" data-i18n="startButton">開始自動剪輯</button>
-            <span id="picked" class="hint" data-i18n="noFile">尚未選擇檔案</span>
           </div>
         </form>
 
@@ -600,7 +673,6 @@
   <script>
     const form = document.getElementById("form");
     const video = document.getElementById("video");
-    const picked = document.getElementById("picked");
     const submit = document.getElementById("submit");
     const statusBox = document.getElementById("status");
     const state = document.getElementById("state");
@@ -613,6 +685,10 @@
     const errorHelp = document.getElementById("errorHelp");
     const drop = document.getElementById("drop");
     const chooseFile = document.getElementById("chooseFile");
+    const fileCard = document.getElementById("fileCard");
+    const fileName = document.getElementById("fileName");
+    const fileMeta = document.getElementById("fileMeta");
+    const fileState = document.getElementById("fileState");
     const langZh = document.getElementById("langZh");
     const langEn = document.getElementById("langEn");
     let currentLang = localStorage.getItem("reels-lang") || "zh";
@@ -635,7 +711,12 @@
         coverContrastName: "高對比爆點",
         coverContrastDesc: "強陰影與底部 hook，適合提高停留率。",
         startButton: "開始自動剪輯",
+        workingButton: "正在處理",
         noFile: "尚未選擇檔案",
+        fileReady: "可以上傳",
+        fileNeedsFix: "需調整",
+        fileMeta: "格式：{type} · 大小：{size}",
+        replaceFile: "更換影片",
         ready: "準備中",
         uploading: "上傳中",
         uploadFailed: "上傳失敗",
@@ -657,6 +738,7 @@
         errorUnreadableHelp: "伺服器讀不到影片資訊，可能是檔案損毀或不是標準影片容器。",
         openVideo: "開啟 Reels 影片",
         openCover: "開啟封面",
+        resetButton: "再剪一支影片",
         rulesTitle: "上傳規則與資安",
         ruleDurationTitle: "最長 10 分鐘",
         ruleDurationText: "上傳後會先用 FFprobe 驗證長度，超過就拒絕處理。",
@@ -695,7 +777,12 @@
         coverContrastName: "High Contrast Hook",
         coverContrastDesc: "Stronger shadows and a bottom hook for retention.",
         startButton: "Start Auto Edit",
+        workingButton: "Working",
         noFile: "No file selected",
+        fileReady: "Ready",
+        fileNeedsFix: "Needs fix",
+        fileMeta: "Format: {type} · Size: {size}",
+        replaceFile: "Replace Video",
         ready: "Ready",
         uploading: "Uploading",
         uploadFailed: "Upload failed",
@@ -717,6 +804,7 @@
         errorUnreadableHelp: "The server could not read the video metadata. The file may be damaged or not a standard video container.",
         openVideo: "Open Reels Video",
         openCover: "Open Cover",
+        resetButton: "Edit Another Video",
         rulesTitle: "Upload Rules & Security",
         ruleDurationTitle: "10 minutes max",
         ruleDurationText: "The app validates duration with FFprobe before processing and rejects longer videos.",
@@ -753,7 +841,7 @@
       document.querySelectorAll("[data-i18n]").forEach((node) => {
         node.textContent = t(node.dataset.i18n);
       });
-      if (!video.files.length) picked.textContent = t("noFile");
+      renderFileCard(video.files[0]);
     }
 
     langZh.addEventListener("click", () => applyLanguage("zh"));
@@ -787,6 +875,18 @@
       errorHelp.textContent = "";
     }
 
+    function resetProgressUi() {
+      statusBox.classList.remove("show");
+      clearError();
+      setProgress(0, "determinate");
+      uploadPct.textContent = "0%";
+      log.textContent = "";
+      log.classList.add("log-hidden");
+      document.querySelectorAll(".stage").forEach((node) => {
+        node.classList.remove("active", "done");
+      });
+    }
+
     function showError(message, helpKey) {
       statusBox.classList.add("show");
       errorTitle.textContent = message || t("errorTitle");
@@ -815,6 +915,44 @@
         return false;
       }
       return true;
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes) return "0 MB";
+      const units = ["B", "KB", "MB", "GB"];
+      let size = bytes;
+      let unit = 0;
+      while (size >= 1024 && unit < units.length - 1) {
+        size /= 1024;
+        unit += 1;
+      }
+      return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+    }
+
+    function selectedFileIssue(file) {
+      if (!file) return null;
+      const lowerName = file.name.toLowerCase();
+      const okType = [".mp4", ".mov", ".m4v"].some((ext) => lowerName.endsWith(ext));
+      if (!okType) return "errorFileTypeHelp";
+      if (file.size > 1.2 * 1024 * 1024 * 1024) return "errorTooLargeHelp";
+      return null;
+    }
+
+    function renderFileCard(file) {
+      if (!file) {
+        fileCard.classList.remove("show");
+        chooseFile.textContent = t("chooseFile");
+        return;
+      }
+      const ext = (file.name.split(".").pop() || "video").toUpperCase();
+      const issue = selectedFileIssue(file);
+      fileCard.classList.add("show");
+      fileName.textContent = file.name;
+      fileMeta.textContent = t("fileMeta").replace("{type}", ext).replace("{size}", formatBytes(file.size));
+      fileState.textContent = issue ? t("fileNeedsFix") : t("fileReady");
+      fileState.classList.toggle("bad", Boolean(issue));
+      fileCard.querySelector(".file-icon").textContent = ext.slice(0, 4);
+      chooseFile.textContent = t("replaceFile");
     }
 
     function errorHelpKey(message, status) {
@@ -872,7 +1010,8 @@
     }
 
     video.addEventListener("change", () => {
-      picked.textContent = video.files[0] ? video.files[0].name : t("noFile");
+      renderFileCard(video.files[0]);
+      clearError();
     });
 
     ["dragenter", "dragover"].forEach((eventName) => {
@@ -890,7 +1029,8 @@
     drop.addEventListener("drop", (event) => {
       if (event.dataTransfer.files.length) {
         video.files = event.dataTransfer.files;
-        picked.textContent = video.files[0].name;
+        renderFileCard(video.files[0]);
+        clearError();
       }
     });
 
@@ -898,6 +1038,7 @@
       event.preventDefault();
       if (!validateSelectedFile(video.files[0])) return;
       submit.disabled = true;
+      submit.textContent = t("workingButton");
       statusBox.classList.add("show");
       result.classList.remove("show");
       result.innerHTML = "";
@@ -919,6 +1060,7 @@
       } catch (error) {
         const message = error.payload && error.payload.error ? error.payload.error : t("uploadFailed");
         showError(message, error.network ? "errorNetworkHelp" : errorHelpKey(message, error.status));
+        submit.textContent = t("startButton");
         return;
       }
       state.textContent = t("processing");
@@ -943,6 +1085,7 @@
       }
 
       submit.disabled = false;
+      submit.textContent = t("startButton");
       if (data.status === "error") {
         showError(data.error || t("failed"), "errorGenericHelp");
         return;
@@ -959,8 +1102,16 @@
       result.innerHTML = `
         <a class="download" href="${videoUrl}" target="_blank">${t("openVideo")}</a>
         <a class="download" href="${coverUrl}" target="_blank">${t("openCover")}</a>
+        <button class="primary" id="resetFlow" type="button">${t("resetButton")}</button>
       `;
       result.classList.add("show");
+      document.getElementById("resetFlow").addEventListener("click", () => {
+        video.value = "";
+        renderFileCard(null);
+        result.classList.remove("show");
+        result.innerHTML = "";
+        resetProgressUi();
+      });
     }
   </script>
 </body>
