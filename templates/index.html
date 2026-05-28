@@ -804,6 +804,7 @@
     const fileState = document.getElementById("fileState");
     const langZh = document.getElementById("langZh");
     const langEn = document.getElementById("langEn");
+    const activeJobKey = "reels-active-job";
     let currentLang = localStorage.getItem("reels-lang") || "zh";
     let uploadStartedAt = 0;
     let serverWaitTimer = null;
@@ -838,6 +839,7 @@
         uploadFailed: "上傳失敗",
         uploadProgress: "上傳中",
         processing: "處理中：剪停頓、字幕、封面、IG 壓縮",
+        restoringJob: "已接回上一個處理任務",
         processingTitle: "正在整理你的 Reels",
         processingDetail: "剛收到影片，正在準備分析。",
         processingUploadDetail: "影片正在傳到本機工作區。",
@@ -916,6 +918,7 @@
         uploadFailed: "Upload failed",
         uploadProgress: "Uploading",
         processing: "Processing: pauses, subtitles, cover, IG compression",
+        restoringJob: "Restored the previous processing job",
         processingTitle: "Preparing your Reel",
         processingDetail: "Video received. Analysis is starting.",
         processingUploadDetail: "Uploading the video into the local workspace.",
@@ -1327,11 +1330,32 @@
         submit.textContent = t("startButton");
         return;
       }
+      localStorage.setItem(activeJobKey, created.job_id);
       state.textContent = t("processing");
       uploadPct.textContent = "100%";
       showProcessing({ percent: 28, stage: "validate", stage_percent: 8, elapsed_seconds: 0, eta_seconds: null });
       poll(created.job_id);
     });
+
+    function restoreActiveJob() {
+      const jobId = localStorage.getItem(activeJobKey);
+      if (!jobId) return;
+      statusBox.classList.add("show");
+      result.classList.remove("show");
+      result.innerHTML = "";
+      clearError();
+      submit.disabled = true;
+      submit.textContent = t("workingButton");
+      state.textContent = t("restoringJob");
+      showProcessing({
+        percent: 28,
+        stage: "validate",
+        stage_percent: 8,
+        elapsed_seconds: 0,
+        eta_seconds: null
+      });
+      poll(jobId);
+    }
 
     async function poll(jobId) {
       let response;
@@ -1346,6 +1370,7 @@
       }
       if (!response.ok) {
         showError(data.error || t("failed"), errorHelpKey(data.error, response.status));
+        localStorage.removeItem(activeJobKey);
         submit.textContent = t("startButton");
         return;
       }
@@ -1367,6 +1392,7 @@
       submit.textContent = t("startButton");
       if (data.status === "error") {
         showError(data.error || t("failed"), "errorGenericHelp");
+        localStorage.removeItem(activeJobKey);
         return;
       }
 
@@ -1386,6 +1412,7 @@
       `;
       result.classList.add("show");
       document.getElementById("resetFlow").addEventListener("click", () => {
+        localStorage.removeItem(activeJobKey);
         video.value = "";
         renderFileCard(null);
         result.classList.remove("show");
@@ -1393,6 +1420,8 @@
         resetProgressUi();
       });
     }
+
+    restoreActiveJob();
   </script>
 </body>
 </html>
