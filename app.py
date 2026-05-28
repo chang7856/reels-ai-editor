@@ -223,11 +223,15 @@ def create_job():
 
     log_path = job_dir / "run.log"
     log_file = log_path.open("w")
+    child_env = os.environ.copy()
+    child_env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+    child_env.setdefault("OMP_NUM_THREADS", "1")
     process = subprocess.Popen(
         ["python3", str(PIPELINE), str(source), str(job_dir), str(options_path)],
         stdout=log_file,
         stderr=subprocess.STDOUT,
         cwd=str(ROOT),
+        env=child_env,
     )
     jobs[job_id] = {
         "process": process,
@@ -256,6 +260,12 @@ def job_status(job_id):
         error = "處理失敗，請看 log。"
     result = json.loads(result_path.read_text()) if result_path.exists() else None
     log = log_path.read_text(errors="ignore")[-8000:] if log_path.exists() else ""
+    if "OMP: Error #15" in log:
+        status = "error"
+        error = "轉錄引擎初始化失敗，已修正 OpenMP 設定，請重新上傳一次。"
+    elif not running and not result:
+        status = "error"
+        error = "處理中斷，沒有產生輸出檔。請重新上傳一次。"
     options_path = job_dir / "options.json"
     options = json.loads(options_path.read_text()) if options_path.exists() else {}
     started_at = job.get("started_at") if job else options.get("started_at", job_dir.stat().st_mtime)
