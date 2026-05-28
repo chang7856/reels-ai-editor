@@ -12,7 +12,7 @@ os.environ.setdefault("OMP_NUM_THREADS", "4")
 
 from faster_whisper import WhisperModel
 from opencc import OpenCC
-from PIL import Image, ImageDraw, ImageEnhance, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageStat
 
 
 ROOT = Path(__file__).resolve().parent
@@ -161,22 +161,32 @@ def subtract_ranges(base, cuts):
     return pieces
 
 
-def build_pieces(duration, silences):
+def build_pieces(duration, silences, memory=None):
+    edit = (memory or {}).get("editing", {})
+    opening_trim = float(edit.get("opening_trim_seconds", 0))
+    preserve_tail = float(edit.get("preserve_tail_seconds", 0))
+    protected_tail_start = max(0, duration - preserve_tail)
     cuts = []
     for start, end in silences:
+        if end >= protected_tail_start:
+            continue
         cut_start = max(0, start + 0.06)
-        cut_end = min(duration, end - 0.10)
+        cut_end = min(protected_tail_start, end - 0.10)
         if cut_end - cut_start >= 0.18:
             cuts.append((cut_start, cut_end))
     pieces = subtract_ranges((0.0, duration), cuts)
     merged = []
     for start, end in pieces:
+        if not merged and opening_trim and end > opening_trim:
+            start = max(start, opening_trim)
         if end - start < 0.22:
             continue
         if merged and start - merged[-1][1] < 0.12:
             merged[-1] = (merged[-1][0], end)
         else:
             merged.append((start, end))
+    if merged and merged[-1][1] < duration:
+        merged[-1] = (merged[-1][0], duration)
     return merged
 
 
@@ -224,6 +234,9 @@ def clean_zh(text):
         "Claude": " Claude ",
         "AI": " AI ",
         "IG": " IG ",
+        "APP": "App",
+        "App": "App",
+        "app": "App",
         "po文": "貼文",
         "user": "使用者",
         "account": "帳號",
@@ -243,6 +256,9 @@ def clean_zh(text):
         text = text.replace(source, target)
     text = re.sub(r"\b([A-Za-z][A-Za-z0-9/+\-.]*)\b", r" \1 ", text)
     text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\bA\s+p\s+p\b", "App", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bA\s+I\b", "AI", text)
+    text = re.sub(r"\bI\s+G\b", "IG", text)
     text = re.sub(r"^(就是|然後|那|嗯|呃|啊)[，, ]*", "", text).strip()
     text = re.sub(r"(啊|嘛|呢|吧)$", "", text).strip()
     return text
@@ -338,29 +354,54 @@ def build_cover_copy(memory, zh_segments, en_segments):
     if not hook:
         return cover, None
     hook_time = max(0.2, (hook["start"] + hook["end"]) / 2)
-    lines = plain_wrap_zh(hook["text"], 9)
-    if lines:
-        cover["main_line_1"] = lines[0]
-        cover["main_line_2"] = lines[1] if len(lines) > 1 else "值得看完"
-    english = nearest_english_segment(en_segments, hook_time)
-    if english:
-        cover["english_line"] = wrap_en(english, 32).replace(r"\N", " ")
-    clean_hook = clean_zh(hook["text"])
-    if any(word in clean_hook for word in ["AI", "自動", "小編"]):
+    transcript = clean_zh(" ".join(seg.get("text", "") for seg in zh_segments[:16]))
+    hook_text = clean_zh(hook["text"])
+    if any(word in transcript for word in ["AI", "自動", "剪輯", "小編"]):
+        cover["main_line_1"] = "AI 小編"
+        cover["main_line_2"] = "真的能自動剪片？"
+        cover["english_line"] = "Can AI really edit Reels for you?"
+        cover["bottom_line_1"] = "我把流程"
+        cover["bottom_line_2"] = "直接做成 App"
+    elif any(word in transcript for word in ["廣告", "Google", "投放", "成本"]):
+        cover["main_line_1"] = "廣告流程"
+        cover["main_line_2"] = "可以自動跑嗎？"
+        cover["english_line"] = "Can ads run on autopilot?"
         cover["bottom_line_1"] = "小團隊也能"
-        cover["bottom_line_2"] = "自動跑起來"
-    elif any(word in clean_hook for word in ["廣告", "Google", "成本"]):
-        cover["bottom_line_1"] = "廣告流程"
-        cover["bottom_line_2"] = "可以更省力"
+        cover["bottom_line_2"] = "省下重複工作"
     else:
-        cover["bottom_line_1"] = "這段重點"
-        cover["bottom_line_2"] = "先幫你整理好"
+        lines = plain_wrap_zh(hook_text, 9)
+        if lines:
+            cover["main_line_1"] = lines[0]
+            cover["main_line_2"] = lines[1] if len(lines) > 1 else "這段值得看完"
+        english = nearest_english_segment(en_segments, hook_time)
+        if english:
+            cover["english_line"] = wrap_en(english, 32).replace(r"\N", " ")
+        cover["bottom_line_1"] = "重點已經"
+        cover["bottom_line_2"] = "幫你整理好了"
     cover["top_label"] = "POV"
     return cover, hook
 
 
 def ass_escape(text):
     return text.replace("{", "").replace("}", "")
+
+
+def subtitle_events(segments, timeline, style, cleaner, wrapper):
+    events = []
+    last_text, last_end = None, -99
+    for seg in segments:
+        for item in intersections(seg, timeline):
+            start, end = item["start"], max(item["end"], item["start"] + 0.65)
+            text = ass_escape(wrapper(cleaner(item["text"])))
+            if not text:
+                continue
+            normalized = re.sub(r"\s+", "", text.replace(r"\N", ""))
+            if normalized == last_text and start - last_end < 1.25:
+                last_end = max(last_end, end)
+                continue
+            events.append((start, end, style, text))
+            last_text, last_end = normalized, end
+    return events
 
 
 def build_ass(zh_segments, en_segments, timeline, ass_path, memory):
@@ -379,19 +420,12 @@ Style: EN,Helvetica Neue,{sub['english_font_size']},&H00F2F2F2,&H00FFFFFF,&HA800
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines = [header]
-    for seg in zh_segments:
-        for item in intersections(seg, timeline):
-            start, end = item["start"], max(item["end"], item["start"] + 0.65)
-            zh = ass_escape(wrap_zh(clean_zh(item["text"])))
-            if zh:
-                lines.append(f"Dialogue: 1,{ass_ts(start)},{ass_ts(end)},ZH,,0,0,0,,{zh}\n")
+    events = subtitle_events(zh_segments, timeline, "ZH", clean_zh, wrap_zh)
     if sub["bilingual"]:
-        for seg in en_segments:
-            for item in intersections(seg, timeline):
-                start, end = item["start"], max(item["end"], item["start"] + 0.65)
-                en = ass_escape(wrap_en(item["text"]))
-                if en:
-                    lines.append(f"Dialogue: 0,{ass_ts(start)},{ass_ts(end)},EN,,0,0,0,,{en}\n")
+        events.extend(subtitle_events(en_segments, timeline, "EN", lambda text: re.sub(r"\s+", " ", text).strip(), wrap_en))
+    for start, end, style, text in sorted(events, key=lambda row: (row[0], row[2])):
+        layer = 1 if style == "ZH" else 0
+        lines.append(f"Dialogue: {layer},{ass_ts(start)},{ass_ts(end)},{style},,0,0,0,,{text}\n")
     ass_path.write_text("".join(lines))
 
 
@@ -459,22 +493,65 @@ def draw_centered(draw, text, y, font, fill, stroke_width=4):
     draw.text((x, y), text, font=font, fill=fill, stroke_width=stroke_width, stroke_fill=(0, 0, 0))
 
 
+def frame_quality(path):
+    im = Image.open(path).convert("RGB")
+    gray = im.convert("L")
+    sharpness = ImageStat.Stat(gray.filter(ImageFilter.FIND_EDGES)).var[0]
+    brightness = ImageStat.Stat(gray).mean[0]
+    contrast = ImageStat.Stat(gray).stddev[0]
+    w, h = gray.size
+    eye_crop = gray.crop((int(w * 0.18), int(h * 0.28), int(w * 0.82), int(h * 0.48)))
+    eye_pixels = list(eye_crop.getdata())
+    eye_dark_ratio = sum(1 for value in eye_pixels if value < 90) / max(1, len(eye_pixels))
+    brightness_penalty = abs(brightness - 132) * 0.35
+    blink_penalty = 55 if eye_dark_ratio < 0.012 else 0
+    return sharpness + contrast + eye_dark_ratio * 1800 - brightness_penalty - blink_penalty
+
+
+def extract_cover_candidate(video, candidate_path, seek):
+    run([
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-ss", f"{seek:.2f}",
+        "-i", str(video),
+        "-vf", "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280",
+        "-frames:v", "1",
+        "-update", "1",
+        str(candidate_path),
+    ])
+
+
+def pick_cover_frame(video, frame, hook_time, duration):
+    base = hook_time if hook_time is not None else duration * 0.18
+    seeks = [
+        base - 1.0, base - 0.55, base, base + 0.45, base + 0.9,
+        duration * 0.22, duration * 0.38, duration * 0.55,
+    ]
+    best = None
+    for index, raw_seek in enumerate(seeks):
+        seek = min(max(raw_seek, 0.7), max(duration - 0.7, 0.7))
+        candidate = frame.with_name(f"cover_candidate_{index}.jpg")
+        try:
+            extract_cover_candidate(video, candidate, seek)
+            score = frame_quality(candidate)
+        except Exception:
+            continue
+        if best is None or score > best[0]:
+            best = (score, candidate, seek)
+    if best:
+        shutil.copy2(best[1], frame)
+        return best[2]
+    extract_cover_candidate(video, frame, min(max(base, 0.7), max(duration - 0.7, 0.7)))
+    return base
+
+
 def make_cover(video, output, memory, cover_copy=None, hook_time=None, job_dir=None):
     if job_dir:
         write_progress(job_dir, "render", "正在挑選最適合當 hook 的封面畫面")
     log("6/7 Creating cover")
     frame = output.with_name("cover_base.jpg")
     duration = ffprobe_duration(video)
-    seek_source = hook_time if hook_time is not None else duration * 0.12
-    seek = min(max(seek_source, 1.0), max(duration - 1.0, 1.0))
-    run([
-        "ffmpeg", "-hide_banner", "-y",
-        "-ss", f"{seek:.2f}",
-        "-i", str(video),
-        "-vf", "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280",
-        "-frames:v", "1",
-        str(frame),
-    ])
+    selected_seek = pick_cover_frame(video, frame, hook_time, duration)
+    log(f"Selected cover frame at {selected_seek:.2f}s")
     cover = cover_copy or memory["cover"]
     style = memory.get("runtime_options", {}).get("cover_style", cover.get("default_style", "editorial"))
     im = Image.open(frame).convert("RGB")
@@ -559,7 +636,7 @@ def process_video(source, job_dir, options_path=None):
     cover_copy, hook_segment = build_cover_copy(memory, zh_segments, en_segments)
     log("4/7 Building edit timeline and subtitles")
     duration = ffprobe_duration(input_video)
-    pieces = build_pieces(duration, parse_silences(silence_log))
+    pieces = build_pieces(duration, parse_silences(silence_log), memory)
     timeline = make_timeline(pieces)
     write_progress(job_dir, "render", "正在建立剪輯時間軸與雙語字幕")
     build_ass(zh_segments, en_segments, timeline, ass_path, memory)

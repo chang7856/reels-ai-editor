@@ -4,7 +4,7 @@
     "traditional_chinese": true,
     "bilingual": true,
     "chinese_font_size": 51,
-    "english_font_size": 30,
+    "english_font_size": 33,
     "chinese_letter_spacing": 2,
     "english_letter_spacing": 0.5,
     "chinese_bottom_margin": 430,
@@ -20,7 +20,9 @@
     "silence_min_duration": 0.32,
     "keep_bye_ending": true,
     "do_not_over_rewrite_story": true,
-    "remove_filler_words_in_subtitle": true
+    "remove_filler_words_in_subtitle": true,
+    "opening_trim_seconds": 0.25,
+    "preserve_tail_seconds": 1.4
   },
   "performance": {
     "mode": "fast",

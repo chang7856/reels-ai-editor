@@ -20,6 +20,8 @@ A local GUI tool for uploading raw footage, automatically removing pauses, addin
 - 上傳與處理時顯示總進度、各階段進度、已花時間與預估剩餘時間
 - 錯誤會顯示人可以看懂的原因，例如格式不支援、檔案太大、超過 10 分鐘或影片損毀
 - Fast mode 共用同一個 Whisper `small` model、使用 `int8` 與較低 beam search，讓短影音在本機 CPU 上快很多
+- 封面會抽多張候選畫面，用清晰度、亮度與對比挑選，避免拿到眨眼或模糊畫面
+- 剪輯會避開開頭失焦片段，並保留結尾安全尾巴，避免最後一句被切掉
 
 - Upload MOV / MP4 / M4V videos
 - Automatically detect and remove pauses
@@ -35,6 +37,8 @@ A local GUI tool for uploading raw footage, automatically removing pauses, addin
 - Show total progress, per-stage progress, elapsed time, and estimated time remaining
 - Explain upload errors clearly, including unsupported format, oversized file, videos over 10 minutes, or unreadable media
 - Fast mode uses one shared Whisper `small` model load, `int8`, and low beam search so short Reels finish much faster on local CPU
+- Cover generation samples multiple candidate frames and scores sharpness, brightness, and contrast
+- Editing trims likely blurry opening frames and preserves a tail buffer so the ending is not cut off
 
 ## 啟動 / Run
 
@@ -140,6 +144,8 @@ Current saved preferences include:
 - 剪停頓，但不過度重寫故事
 - 保留結尾「掰掰」
 - Fast mode：Whisper `small`、共用模型載入、`int8`、beam size 1
+- 英文字幕字級：33
+- 開頭避開 0.25 秒；結尾保留 1.4 秒
 
 - Title: `POV：全自動化 AI 小編跟廣告`
 - Subtitles: Traditional Chinese + English, centered, safe area
@@ -150,6 +156,8 @@ Current saved preferences include:
 - Remove pauses without over-rewriting the story
 - Keep the ending "bye"
 - Fast mode: Whisper `small`, shared model load, `int8`, beam size 1
+- English subtitle size: 33
+- Skip the first 0.25 seconds and preserve the final 1.4 seconds
 
 ## 需求 / Requirements
 
