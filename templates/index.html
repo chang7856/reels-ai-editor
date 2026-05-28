@@ -431,9 +431,8 @@
       margin: 12px 0;
     }
     .stage {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 12px;
       padding: 9px 11px;
       border: 1px solid #edf0f3;
@@ -468,6 +467,26 @@
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+    .stage-track {
+      grid-column: 1 / -1;
+      height: 5px;
+      border-radius: 999px;
+      background: #edf0f3;
+      overflow: hidden;
+    }
+    .stage-track span {
+      display: block;
+      width: var(--stage-progress, 0%);
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--teal), var(--accent));
+      transition: width .25s ease;
+    }
+    .stage-meta {
+      color: inherit;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
     }
     .error-card {
       display: none;
@@ -706,10 +725,10 @@
             <div id="etaTime" class="time-chip"></div>
           </div>
           <div class="stage-list" aria-live="polite">
-            <div class="stage" data-stage="upload"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageUpload">上傳影片</span></span><span id="uploadPct">0%</span></div>
-            <div class="stage" data-stage="validate"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageValidate">檢查格式與長度</span></span></div>
-            <div class="stage" data-stage="transcribe"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageTranscribe">轉錄與翻譯</span></span></div>
-            <div class="stage" data-stage="render"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageRender">剪輯與輸出</span></span></div>
+            <div class="stage" data-stage="upload"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageUpload">上傳影片</span></span><span id="uploadPct" class="stage-meta">0%</span><div class="stage-track"><span></span></div></div>
+            <div class="stage" data-stage="validate"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageValidate">檢查格式與長度</span></span><span class="stage-meta" data-stage-percent="validate">0%</span><div class="stage-track"><span></span></div></div>
+            <div class="stage" data-stage="transcribe"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageTranscribe">轉錄與翻譯</span></span><span class="stage-meta" data-stage-percent="transcribe">0%</span><div class="stage-track"><span></span></div></div>
+            <div class="stage" data-stage="render"><span class="stage-label"><span class="stage-dot"></span><span data-i18n="stageRender">剪輯與輸出</span></span><span class="stage-meta" data-stage-percent="render">0%</span><div class="stage-track"><span></span></div></div>
           </div>
           <div id="errorCard" class="error-card">
             <div id="errorTitle" class="error-title"></div>
@@ -1003,12 +1022,36 @@
       processingCard.classList.add("show");
       timeRow.classList.add("show");
       processingTitle.textContent = t("processingTitle");
-      processingDetail.textContent = stageDetail(stage);
+      processingDetail.textContent = progress.detail || stageDetail(stage);
       processingPercent.textContent = `${Math.round(percent)}%`;
       elapsedTime.textContent = `${t("elapsedLabel")} ${formatDuration(progress.elapsed_seconds || 0)}`;
       etaTime.textContent = `${t("etaLabel")} ${formatDuration(progress.eta_seconds)}`;
       setProgress(percent, "determinate");
       setStage(stage);
+      updateStageProgress(progress.stage_progress, stage, progress.stage_percent);
+    }
+
+    function setStageBar(stage, percent) {
+      const node = document.querySelector(`.stage[data-stage="${stage}"]`);
+      if (!node) return;
+      const cleanPercent = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+      node.style.setProperty("--stage-progress", `${cleanPercent}%`);
+      const meta = stage === "upload" ? uploadPct : node.querySelector("[data-stage-percent]");
+      if (meta) meta.textContent = `${cleanPercent}%`;
+    }
+
+    function updateStageProgress(stageProgress, activeStage, stagePercent) {
+      if (stageProgress) {
+        Object.entries(stageProgress).forEach(([stage, row]) => setStageBar(stage, row.percent));
+        return;
+      }
+      const order = ["upload", "validate", "transcribe", "render"];
+      const activeIndex = order.indexOf(activeStage);
+      order.forEach((stage, index) => {
+        if (index < activeIndex) setStageBar(stage, 100);
+        else if (index === activeIndex) setStageBar(stage, stagePercent || 0);
+        else setStageBar(stage, 0);
+      });
     }
 
     function elapsedSince(timestamp) {
@@ -1028,6 +1071,7 @@
       showProcessing({
         percent: 28,
         stage: "validate",
+        stage_percent: 8,
         elapsed_seconds: elapsedSince(uploadStartedAt),
         eta_seconds: null
       });
@@ -1070,6 +1114,7 @@
       hideProcessing();
       setProgress(0, "determinate");
       uploadPct.textContent = "0%";
+      ["upload", "validate", "transcribe", "render"].forEach((stage) => setStageBar(stage, 0));
       log.textContent = "";
       log.classList.add("log-hidden");
       document.querySelectorAll(".stage").forEach((node) => {
@@ -1165,6 +1210,7 @@
             showProcessing({
               percent: 8,
               stage: "upload",
+              stage_percent: 8,
               elapsed_seconds: elapsedSince(uploadStartedAt),
               eta_seconds: null
             });
@@ -1178,6 +1224,7 @@
           showProcessing({
             percent: workflowPercent,
             stage: "upload",
+            stage_percent: percent,
             elapsed_seconds: elapsedSince(uploadStartedAt),
             eta_seconds: null
           });
@@ -1279,7 +1326,7 @@
       }
       state.textContent = t("processing");
       uploadPct.textContent = "100%";
-      showProcessing({ percent: 28, stage: "validate", elapsed_seconds: 0, eta_seconds: null });
+      showProcessing({ percent: 28, stage: "validate", stage_percent: 8, elapsed_seconds: 0, eta_seconds: null });
       poll(created.job_id);
     });
 

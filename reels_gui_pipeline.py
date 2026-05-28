@@ -3,6 +3,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from faster_whisper import WhisperModel
@@ -18,6 +19,25 @@ FONT_EN = "/System/Library/Fonts/HelveticaNeue.ttc"
 
 def log(message):
     print(message, flush=True)
+
+
+def write_progress(job_dir, stage, detail):
+    progress_path = Path(job_dir) / "progress.json"
+    previous = {}
+    if progress_path.exists():
+        try:
+            previous = json.loads(progress_path.read_text())
+        except json.JSONDecodeError:
+            previous = {}
+    now = time.time()
+    if previous.get("stage") != stage:
+        previous["stage_started_at"] = now
+    previous.update({
+        "stage": stage,
+        "detail": detail,
+        "updated_at": now,
+    })
+    progress_path.write_text(json.dumps(previous, ensure_ascii=False, indent=2))
 
 
 def run(cmd, capture=False):
@@ -46,7 +66,9 @@ def ffprobe_duration(video):
     return float(result.stdout.strip())
 
 
-def extract_audio(video, wav):
+def extract_audio(video, wav, job_dir=None):
+    if job_dir:
+        write_progress(job_dir, "validate", "正在抽出音訊，準備偵測停頓")
     log("1/7 Extracting audio")
     run([
         "ffmpeg", "-hide_banner", "-y",
@@ -56,7 +78,9 @@ def extract_audio(video, wav):
     ])
 
 
-def detect_silence(video, log_path, memory):
+def detect_silence(video, log_path, memory, job_dir=None):
+    if job_dir:
+        write_progress(job_dir, "validate", "正在偵測停頓與不必要空白")
     log("2/7 Detecting pauses")
     edit = memory["editing"]
     result = run([
@@ -74,8 +98,11 @@ def parse_silences(log_path):
     return list(zip(starts, ends))
 
 
-def transcribe(wav, out_json, task="transcribe"):
+def transcribe(wav, out_json, task="transcribe", job_dir=None):
     label = "Chinese transcription" if task == "transcribe" else "English translation"
+    if job_dir:
+        detail = "正在產生繁體中文字幕" if task == "transcribe" else "正在翻譯英文字幕"
+        write_progress(job_dir, "transcribe", detail)
     log(f"3/7 Running {label}")
     model = WhisperModel("large-v3-turbo", device="cpu", compute_type="int8")
     segments, info = model.transcribe(
@@ -247,6 +274,69 @@ def wrap_en(text, width=38):
     return r"\N".join(lines[:2])
 
 
+def plain_wrap_zh(text, max_chars=9):
+    compact = re.sub(r"\s+", " ", clean_zh(text)).strip(" ，,。.!！?")
+    if not compact:
+        return []
+    lines = wrap_zh(compact, max_width=max_chars * 2).split(r"\N")
+    return [line.strip() for line in lines[:2] if line.strip()]
+
+
+def segment_hook_score(segment, index=0):
+    text = clean_zh(segment.get("text", ""))
+    keywords = [
+        "AI", "自動", "廣告", "小編", "Google", "成本", "省", "免費",
+        "問題", "方法", "怎麼", "為什麼", "其實", "最", "不需要", "可以",
+    ]
+    score = max(0, 60 - segment.get("start", 0)) * 0.12
+    score += max(0, 26 - len(text)) * 0.12
+    score += sum(4 for word in keywords if word in text)
+    score += 6 if re.search(r"[？?！!]", text) else 0
+    score += 2 if index < 6 else 0
+    return score
+
+
+def best_hook_segment(zh_segments):
+    if not zh_segments:
+        return None
+    candidates = [(segment_hook_score(seg, index), seg) for index, seg in enumerate(zh_segments[:24])]
+    return max(candidates, key=lambda item: item[0])[1]
+
+
+def nearest_english_segment(en_segments, target):
+    if not en_segments:
+        return ""
+    match = min(en_segments, key=lambda seg: abs(((seg["start"] + seg["end"]) / 2) - target))
+    return re.sub(r"\s+", " ", match.get("text", "")).strip()
+
+
+def build_cover_copy(memory, zh_segments, en_segments):
+    cover = dict(memory["cover"])
+    hook = best_hook_segment(zh_segments)
+    if not hook:
+        return cover, None
+    hook_time = max(0.2, (hook["start"] + hook["end"]) / 2)
+    lines = plain_wrap_zh(hook["text"], 9)
+    if lines:
+        cover["main_line_1"] = lines[0]
+        cover["main_line_2"] = lines[1] if len(lines) > 1 else "值得看完"
+    english = nearest_english_segment(en_segments, hook_time)
+    if english:
+        cover["english_line"] = wrap_en(english, 32).replace(r"\N", " ")
+    clean_hook = clean_zh(hook["text"])
+    if any(word in clean_hook for word in ["AI", "自動", "小編"]):
+        cover["bottom_line_1"] = "小團隊也能"
+        cover["bottom_line_2"] = "自動跑起來"
+    elif any(word in clean_hook for word in ["廣告", "Google", "成本"]):
+        cover["bottom_line_1"] = "廣告流程"
+        cover["bottom_line_2"] = "可以更省力"
+    else:
+        cover["bottom_line_1"] = "這段重點"
+        cover["bottom_line_2"] = "先幫你整理好"
+    cover["top_label"] = "POV"
+    return cover, hook
+
+
 def ass_escape(text):
     return text.replace("{", "").replace("}", "")
 
@@ -313,6 +403,7 @@ def build_filter(video, pieces, ass_path, filter_path, memory):
 
 
 def render_video(video, filter_path, output, memory):
+    write_progress(output.parent, "render", "正在輸出壓縮後的 IG Reels 影片")
     log("5/7 Rendering compressed IG Reels MP4")
     export = memory["export"]
     run([
@@ -346,11 +437,14 @@ def draw_centered(draw, text, y, font, fill, stroke_width=4):
     draw.text((x, y), text, font=font, fill=fill, stroke_width=stroke_width, stroke_fill=(0, 0, 0))
 
 
-def make_cover(video, output, memory):
+def make_cover(video, output, memory, cover_copy=None, hook_time=None, job_dir=None):
+    if job_dir:
+        write_progress(job_dir, "render", "正在挑選最適合當 hook 的封面畫面")
     log("6/7 Creating cover")
     frame = output.with_name("cover_base.jpg")
     duration = ffprobe_duration(video)
-    seek = min(max(duration * 0.12, 1.0), max(duration - 1.0, 1.0))
+    seek_source = hook_time if hook_time is not None else duration * 0.12
+    seek = min(max(seek_source, 1.0), max(duration - 1.0, 1.0))
     run([
         "ffmpeg", "-hide_banner", "-y",
         "-ss", f"{seek:.2f}",
@@ -359,7 +453,7 @@ def make_cover(video, output, memory):
         "-frames:v", "1",
         str(frame),
     ])
-    cover = memory["cover"]
+    cover = cover_copy or memory["cover"]
     style = memory.get("runtime_options", {}).get("cover_style", cover.get("default_style", "editorial"))
     im = Image.open(frame).convert("RGB")
     im = ImageEnhance.Contrast(im).enhance(1.08)
@@ -421,6 +515,7 @@ def make_cover(video, output, memory):
 def process_video(source, job_dir, options_path=None):
     memory = load_memory(options_path)
     job_dir.mkdir(parents=True, exist_ok=True)
+    write_progress(job_dir, "validate", "正在檢查影片並準備處理")
     input_video = job_dir / ("input" + Path(source).suffix.lower())
     if Path(source).resolve() != input_video.resolve():
         shutil.copy2(source, input_video)
@@ -433,27 +528,35 @@ def process_video(source, job_dir, options_path=None):
     output = job_dir / "reels_ig_compressed.mp4"
     cover = job_dir / "reels_cover.jpg"
 
-    extract_audio(input_video, wav)
-    detect_silence(input_video, silence_log, memory)
-    zh_segments = transcribe(wav, zh_json, "transcribe")
-    en_segments = transcribe(wav, en_json, "translate") if memory["subtitle"]["bilingual"] else []
+    extract_audio(input_video, wav, job_dir)
+    detect_silence(input_video, silence_log, memory, job_dir)
+    zh_segments = transcribe(wav, zh_json, "transcribe", job_dir)
+    en_segments = transcribe(wav, en_json, "translate", job_dir) if memory["subtitle"]["bilingual"] else []
+    write_progress(job_dir, "render", "正在 digest 內容，挑選 hook 與封面文案")
+    cover_copy, hook_segment = build_cover_copy(memory, zh_segments, en_segments)
     log("4/7 Building edit timeline and subtitles")
     duration = ffprobe_duration(input_video)
     pieces = build_pieces(duration, parse_silences(silence_log))
     timeline = make_timeline(pieces)
+    write_progress(job_dir, "render", "正在建立剪輯時間軸與雙語字幕")
     build_ass(zh_segments, en_segments, timeline, ass_path, memory)
     build_filter(input_video, pieces, ass_path, filter_path, memory)
     render_video(input_video, filter_path, output, memory)
-    make_cover(input_video, cover, memory)
+    hook_time = ((hook_segment["start"] + hook_segment["end"]) / 2) if hook_segment else None
+    make_cover(input_video, cover, memory, cover_copy, hook_time, job_dir)
     metadata = {
         "video": output.name,
         "cover": cover.name,
         "duration_seconds": round(timeline[-1]["dst_end"] if timeline else 0, 2),
         "pieces": len(pieces),
         "cover_style": memory.get("runtime_options", {}).get("cover_style", memory["cover"].get("default_style")),
+        "cover_copy": cover_copy,
+        "hook_time_seconds": round(hook_time, 2) if hook_time is not None else None,
+        "hook_text": clean_zh(hook_segment["text"]) if hook_segment else None,
         "memory": memory,
     }
     (job_dir / "result.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2))
+    write_progress(job_dir, "done", "影片與封面都完成了")
     log("7/7 Done")
     return metadata
 

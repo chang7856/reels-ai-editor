@@ -28,6 +28,13 @@ MAX_DURATION_SECONDS = 600
 MAX_RETENTION_SECONDS = 3 * 60 * 60
 ALLOWED_EXTENSIONS = {".mp4", ".mov", ".m4v"}
 ALLOWED_COVER_STYLES = {"editorial", "creator", "high_contrast"}
+STAGE_MODEL = {
+    "upload": {"start": 0, "end": 18, "label": "上傳影片"},
+    "validate": {"start": 18, "end": 34, "label": "檢查格式與長度"},
+    "transcribe": {"start": 34, "end": 66, "label": "轉錄與翻譯"},
+    "render": {"start": 66, "end": 98, "label": "剪輯與輸出"},
+    "done": {"start": 100, "end": 100, "label": "完成"},
+}
 
 
 def allowed(filename):
@@ -68,37 +75,104 @@ def video_duration(path):
     return float(result.stdout.strip())
 
 
-def processing_progress(log, status, result, started_at, duration):
+def stage_estimates(duration):
+    duration = duration or 60
+    return {
+        "upload": 1,
+        "validate": max(10, duration * 0.18),
+        "transcribe": max(90, duration * 4.0),
+        "render": max(55, duration * 1.55),
+    }
+
+
+def progress_from_stage(stage, started_at, duration):
+    stage = stage if stage in STAGE_MODEL else "validate"
+    if stage == "done":
+        return 100, 0, 100
+    elapsed = max(1, time.time() - started_at)
+    estimates = stage_estimates(duration)
+    expected = estimates.get(stage, 60)
+    stage_percent = min(96, max(4, int((elapsed / expected) * 100)))
+    model = STAGE_MODEL[stage]
+    percent = model["start"] + (model["end"] - model["start"]) * (stage_percent / 100)
+    eta = max(0, int(expected - elapsed))
+    return int(percent), eta, stage_percent
+
+
+def stage_breakdown(active_stage, stage_percent):
+    order = ["upload", "validate", "transcribe", "render"]
+    active_index = order.index(active_stage) if active_stage in order else len(order)
+    rows = {}
+    for index, stage in enumerate(order):
+        if index < active_index:
+            percent = 100
+            state = "done"
+        elif index == active_index:
+            percent = stage_percent
+            state = "active"
+        else:
+            percent = 0
+            state = "waiting"
+        rows[stage] = {
+            "percent": int(max(0, min(100, percent))),
+            "state": state,
+            "label": STAGE_MODEL[stage]["label"],
+        }
+    return rows
+
+
+def parse_progress_state(job_dir):
+    progress_path = job_dir / "progress.json"
+    if not progress_path.exists():
+        return {}
+    try:
+        return json.loads(progress_path.read_text())
+    except json.JSONDecodeError:
+        return {}
+
+
+def processing_progress(log, status, result, started_at, duration, progress_state=None):
     if status == "done" and result:
         return {
             "percent": 100,
             "stage": "done",
+            "detail": "影片與封面都完成了",
+            "stage_percent": 100,
+            "stage_progress": stage_breakdown("done", 100),
             "eta_seconds": 0,
             "elapsed_seconds": max(0, int(time.time() - started_at)),
         }
 
-    stage, percent = "validate", 28
-    if "7/7" in log:
-        stage, percent = "render", 94
-    elif "6/7" in log:
-        stage, percent = "render", 88
-    elif "5/7" in log:
-        stage, percent = "render", 78
-    elif "4/7" in log:
-        stage, percent = "render", 68
-    elif "3/7" in log:
-        stage, percent = "transcribe", 48
-    elif "2/7" in log or "1/7" in log:
-        stage, percent = "validate", 28
+    progress_state = progress_state or {}
+    stage = progress_state.get("stage") or "validate"
+    stage_started_at = progress_state.get("stage_started_at") or started_at
+    if not progress_state.get("stage"):
+        if "7/7" in log:
+            stage = "render"
+        elif "5/7" in log or "6/7" in log:
+            stage = "render"
+        elif "3/7" in log:
+            stage = "transcribe"
+        elif "1/7" in log or "2/7" in log:
+            stage = "validate"
 
     elapsed = max(1, int(time.time() - started_at))
-    baseline = max(90, min(45 * 60, int((duration or 60) * 3.2)))
-    estimated_total = max(baseline, int(elapsed / max(percent, 1) * 100))
-    eta = max(0, estimated_total - elapsed)
+    percent, stage_eta, stage_percent = progress_from_stage(stage, stage_started_at, duration)
+    estimates = stage_estimates(duration)
+    order = ["upload", "validate", "transcribe", "render"]
+    remaining = stage_eta
+    if stage in order:
+        active_index = order.index(stage)
+        for later_stage in order[active_index + 1:]:
+            remaining += int(estimates[later_stage])
     return {
         "percent": min(percent, 96),
         "stage": stage,
-        "eta_seconds": eta,
+        "detail": progress_state.get("detail") or STAGE_MODEL.get(stage, STAGE_MODEL["validate"])["label"],
+        "stage_percent": stage_percent,
+        "stage_progress": stage_breakdown(stage, stage_percent),
+        "eta_seconds": remaining,
+        "stage_eta_seconds": stage_eta,
         "elapsed_seconds": elapsed,
     }
 
@@ -186,7 +260,8 @@ def job_status(job_id):
     options = json.loads(options_path.read_text()) if options_path.exists() else {}
     started_at = job.get("started_at") if job else options.get("started_at", job_dir.stat().st_mtime)
     duration = job.get("duration_seconds") if job else options.get("duration_seconds", 60)
-    progress = processing_progress(log, status, result, started_at, duration)
+    progress_state = parse_progress_state(job_dir)
+    progress = processing_progress(log, status, result, started_at, duration, progress_state)
     return jsonify({
         "job_id": job_id,
         "status": status,

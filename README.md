@@ -6,32 +6,32 @@ A local GUI tool for uploading raw footage, automatically removing pauses, addin
 
 ## 功能 / Features
 
-- 上傳 MOV / MP4 / M4V / AVI 影片
+- 上傳 MOV / MP4 / M4V 影片
 - 自動偵測並剪掉停頓
 - 使用 Whisper 轉錄中文並翻譯英文
 - 燒錄繁中 + 英文雙語字幕
 - 套用 IG Reels 安全區，避免標題與字幕被介面遮住
 - 輸出 720 x 1280 的壓縮 Reels MP4
-- 自動產生白字 + 黃字風格封面
+- 自動 digest 內容，挑選 hook 畫面並產生白字 + 黃字風格封面
 - GUI 支援中文 / English 切換
 - Cover 風格可選：雜誌大標、創作者清爽、高對比爆點
 - 上傳影片限制 10 分鐘
 - 上傳檔、輸出檔、封面與 log 會在 3 小時後清除
-- 上傳時顯示即時進度與處理階段
+- 上傳與處理時顯示總進度、各階段進度、已花時間與預估剩餘時間
 - 錯誤會顯示人可以看懂的原因，例如格式不支援、檔案太大、超過 10 分鐘或影片損毀
 
-- Upload MOV / MP4 / M4V / AVI videos
+- Upload MOV / MP4 / M4V videos
 - Automatically detect and remove pauses
 - Transcribe Chinese and translate English with Whisper
 - Burn in Traditional Chinese + English subtitles
 - Use Instagram Reels safe areas for title and subtitles
 - Export a compressed 720 x 1280 Reels MP4
-- Generate a bold white + yellow cover image
+- Digest the content, choose a hook frame, and generate a bold white + yellow cover image
 - Switch the GUI between Chinese and English
 - Choose from three cover styles: Editorial Bold, Clean Creator, High Contrast Hook
 - Limit uploads to 10 minutes
 - Clean up uploads, outputs, covers, and logs after 3 hours
-- Show real-time upload progress and processing stages
+- Show total progress, per-stage progress, elapsed time, and estimated time remaining
 - Explain upload errors clearly, including unsupported format, oversized file, videos over 10 minutes, or unreadable media
 
 ## 啟動 / Run
@@ -77,6 +77,7 @@ Each job is written to `outputs/<job-id>/`:
 - `subtitles.ass`: 字幕檔 / subtitle file
 - `result.json`: 任務結果 / job metadata
 - `run.log`: 處理紀錄 / processing log
+- `progress.json`: 階段進度、目前細節與 ETA 來源 / stage progress, current detail, and ETA source
 
 ## 免費網站方案 / Free Website Option
 
