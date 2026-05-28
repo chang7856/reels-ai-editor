@@ -22,6 +22,14 @@
     "do_not_over_rewrite_story": true,
     "remove_filler_words_in_subtitle": true
   },
+  "performance": {
+    "mode": "fast",
+    "whisper_model": "small",
+    "compute_type": "int8",
+    "beam_size": 1,
+    "cpu_threads": 4,
+    "note": "Fast mode is optimized for short Reels on a local CPU. Use large-v3-turbo only when accuracy matters more than speed."
+  },
   "export": {
     "format": "IG Reels",
     "width": 720,

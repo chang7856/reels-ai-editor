@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
-os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "4")
 
 from faster_whisper import WhisperModel
 from opencc import OpenCC
@@ -102,21 +102,39 @@ def parse_silences(log_path):
     return list(zip(starts, ends))
 
 
-def transcribe(wav, out_json, task="transcribe", job_dir=None):
+def load_whisper(memory, job_dir=None):
+    perf = memory.get("performance", {})
+    model_name = perf.get("whisper_model", "small")
+    compute_type = perf.get("compute_type", "int8")
+    cpu_threads = int(perf.get("cpu_threads", 4))
+    if job_dir:
+        write_progress(job_dir, "transcribe", f"正在載入 Whisper {model_name} fast mode")
+    log(f"Loading Whisper model: {model_name} ({compute_type}, {cpu_threads} threads)")
+    return WhisperModel(
+        model_name,
+        device="cpu",
+        compute_type=compute_type,
+        cpu_threads=cpu_threads,
+        num_workers=1,
+    )
+
+
+def transcribe(model, memory, wav, out_json, task="transcribe", job_dir=None):
     label = "Chinese transcription" if task == "transcribe" else "English translation"
     if job_dir:
         detail = "正在產生繁體中文字幕" if task == "transcribe" else "正在翻譯英文字幕"
         write_progress(job_dir, "transcribe", detail)
     log(f"3/7 Running {label}")
-    model = WhisperModel("large-v3-turbo", device="cpu", compute_type="int8")
+    perf = memory.get("performance", {})
     segments, info = model.transcribe(
         str(wav),
         language="zh",
         task=task,
         vad_filter=True,
-        beam_size=5,
+        beam_size=int(perf.get("beam_size", 1)),
+        best_of=1,
         word_timestamps=False,
-        condition_on_previous_text=True,
+        condition_on_previous_text=False,
     )
     rows = []
     for seg in segments:
@@ -534,8 +552,9 @@ def process_video(source, job_dir, options_path=None):
 
     extract_audio(input_video, wav, job_dir)
     detect_silence(input_video, silence_log, memory, job_dir)
-    zh_segments = transcribe(wav, zh_json, "transcribe", job_dir)
-    en_segments = transcribe(wav, en_json, "translate", job_dir) if memory["subtitle"]["bilingual"] else []
+    model = load_whisper(memory, job_dir)
+    zh_segments = transcribe(model, memory, wav, zh_json, "transcribe", job_dir)
+    en_segments = transcribe(model, memory, wav, en_json, "translate", job_dir) if memory["subtitle"]["bilingual"] else []
     write_progress(job_dir, "render", "正在 digest 內容，挑選 hook 與封面文案")
     cover_copy, hook_segment = build_cover_copy(memory, zh_segments, en_segments)
     log("4/7 Building edit timeline and subtitles")

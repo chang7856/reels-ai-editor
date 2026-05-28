@@ -225,7 +225,7 @@ def create_job():
     log_file = log_path.open("w")
     child_env = os.environ.copy()
     child_env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
-    child_env.setdefault("OMP_NUM_THREADS", "1")
+    child_env.setdefault("OMP_NUM_THREADS", "4")
     process = subprocess.Popen(
         ["python3", str(PIPELINE), str(source), str(job_dir), str(options_path)],
         stdout=log_file,

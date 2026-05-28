@@ -19,6 +19,7 @@ A local GUI tool for uploading raw footage, automatically removing pauses, addin
 - 上傳檔、輸出檔、封面與 log 會在 3 小時後清除
 - 上傳與處理時顯示總進度、各階段進度、已花時間與預估剩餘時間
 - 錯誤會顯示人可以看懂的原因，例如格式不支援、檔案太大、超過 10 分鐘或影片損毀
+- Fast mode 共用同一個 Whisper `small` model、使用 `int8` 與較低 beam search，讓短影音在本機 CPU 上快很多
 
 - Upload MOV / MP4 / M4V videos
 - Automatically detect and remove pauses
@@ -33,6 +34,7 @@ A local GUI tool for uploading raw footage, automatically removing pauses, addin
 - Clean up uploads, outputs, covers, and logs after 3 hours
 - Show total progress, per-stage progress, elapsed time, and estimated time remaining
 - Explain upload errors clearly, including unsupported format, oversized file, videos over 10 minutes, or unreadable media
+- Fast mode uses one shared Whisper `small` model load, `int8`, and low beam search so short Reels finish much faster on local CPU
 
 ## 啟動 / Run
 
@@ -137,6 +139,7 @@ Current saved preferences include:
 - 產生白字 + 黃字封面
 - 剪停頓，但不過度重寫故事
 - 保留結尾「掰掰」
+- Fast mode：Whisper `small`、共用模型載入、`int8`、beam size 1
 
 - Title: `POV：全自動化 AI 小編跟廣告`
 - Subtitles: Traditional Chinese + English, centered, safe area
@@ -146,6 +149,7 @@ Current saved preferences include:
 - Bold white + yellow cover style
 - Remove pauses without over-rewriting the story
 - Keep the ending "bye"
+- Fast mode: Whisper `small`, shared model load, `int8`, beam size 1
 
 ## 需求 / Requirements
 
