@@ -1,18 +1,28 @@
 {
   "title": "POV：全自動化 AI 小編跟廣告",
+  "title_en": "POV: AI editor + ads on autopilot",
   "subtitle": {
     "traditional_chinese": true,
     "bilingual": true,
-    "chinese_font_size": 51,
-    "english_font_size": 33,
+    "chinese_font_size": 56,
+    "english_font_size": 60,
+    "english_font_size_solo": 72,
     "chinese_letter_spacing": 2,
     "english_letter_spacing": 0.5,
-    "chinese_bottom_margin": 430,
-    "english_bottom_margin": 365,
+    "chinese_bottom_margin": 470,
+    "english_bottom_margin": 390,
     "safe_area_note": "Title and subtitles stay away from Instagram Reels top and bottom UI.",
     "mixed_language_spacing": true,
+    "mixed_language_spacing_rule": "When Chinese characters and ASCII letters/digits sit next to each other, always insert exactly one space between them (applies to subtitles, title, and cover copy).",
+    "lead_seconds": 0.12,
+    "hold_seconds": 0.18,
+    "min_gap_seconds": 0.04,
+    "sync_bilingual_to_chinese_timing": true,
     "max_chinese_lines": 2,
-    "max_english_lines": 2
+    "max_english_lines": 2,
+    "line_gap_px": 14,
+    "line_gap_note": "Extra vertical space between line 1 and line 2 of a wrapped subtitle so two-line captions breathe instead of stacking tight.",
+    "no_overlap_note": "Each subtitle is forced to end (min_gap_seconds) before the next one starts so an old line is never on screen while a new one paints."
   },
   "editing": {
     "remove_pauses": true,
@@ -21,27 +31,30 @@
     "keep_bye_ending": true,
     "do_not_over_rewrite_story": true,
     "remove_filler_words_in_subtitle": true,
-    "opening_trim_seconds": 0.25,
-    "preserve_tail_seconds": 1.4
+    "opening_trim_seconds": 1.6,
+    "preserve_tail_seconds": 1.4,
+    "opening_trim_reason": "Skip autofocus pulls and lens warm-up frames (typically up to ~1.5–2s on iPhone selfies) so the first second of the Reel is crisp."
   },
   "performance": {
-    "mode": "fast",
+    "mode": "balanced",
     "whisper_model": "small",
     "compute_type": "int8",
-    "beam_size": 1,
+    "beam_size": 3,
     "cpu_threads": 4,
-    "note": "Fast mode is optimized for short Reels on a local CPU. Use large-v3-turbo only when accuracy matters more than speed."
+    "word_timestamps": true,
+    "note": "Balanced mode: small model with beam=3 and word-level timestamps. Word timestamps let us snap each subtitle event to the actual speech onset so subtitles sit on top of the voice instead of drifting."
   },
   "export": {
     "format": "IG Reels",
     "width": 720,
     "height": 1280,
-    "video_bitrate": "1600k",
-    "maxrate": "2200k",
-    "bufsize": "3200k",
-    "audio_bitrate": "128k",
+    "crf": 22,
+    "maxrate": "4000k",
+    "bufsize": "8000k",
+    "audio_bitrate": "160k",
     "pix_fmt": "yuv420p",
-    "target_note": "Small enough to AirDrop/save to phone album and upload to Instagram Reels."
+    "x264_preset": "medium",
+    "target_note": "CRF 22 keeps faces crisp at 720x1280. Bitrate target / -tune / forced -g all break the first second of the Reel because the first concat piece is sub-1s, so we keep the encoder in pure CRF mode."
   },
   "cover": {
     "enabled": true,
@@ -51,8 +64,12 @@
     "main_line_1": "全自動化 AI",
     "main_line_2": "小編跟廣告",
     "english_line": "AI editor + ads on autopilot",
+    "en_main_line_1": "AI editor +",
+    "en_main_line_2": "ads on autopilot",
     "bottom_line_1": "小團隊也能",
     "bottom_line_2": "跑出一整套自動化",
+    "en_bottom_line_1": "A small team can",
+    "en_bottom_line_2": "run the whole stack",
     "styles": {
       "editorial": {
         "name_zh": "雜誌大標",

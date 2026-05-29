@@ -1,4 +1,7 @@
-flask
-faster-whisper
-opencc-python-reimplemented
-pillow
+# Runtime dependencies for Reels AI Editor.
+# Pin to the major version that the project was tested against.
+
+flask>=3.0,<4
+faster-whisper>=1.0,<2
+opencc-python-reimplemented>=0.1.7
+pillow>=10,<12

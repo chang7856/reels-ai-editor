@@ -1,25 +1,82 @@
+# ─── Python ──────────────────────────────────────────────────────────────
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.Python
+.venv/
+venv/
+env/
+.installed.cfg
+
+# ─── PyInstaller build artefacts ─────────────────────────────────────────
+build/
+dist/
+*.spec.bak
+
+# ─── macOS noise ─────────────────────────────────────────────────────────
 .DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# ─── Editors ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*~
+
+# ─── App data — never commit user footage / runtime output ───────────────
 uploads/*
 !uploads/.gitkeep
 outputs/*
 !outputs/.gitkeep
 transcript/
 transcript_turbo/
-*.mp4
+*.wav
 *.MOV
 *.mov
-*.wav
+*.mp4
+*.m4v
+
+# Whisper / Hugging Face / faster-whisper model cache
+.cache/
+huggingface/
+*.bin
+ggml-*.bin
+
+# ─── Generated previews + ad-hoc debug artefacts ─────────────────────────
 preview_*.jpg
+preview_*.png
+_*.jpg
+_*.png
+_*.mp4
 cover_base.jpg
-source_audio_16k.wav
-silence.log
-transcript_faster.*
+cover_candidate_*.jpg
+reels_cover_v*.jpg
+
+# Old dev iterations (v1/v2/v3/v4 scripts)
 reels_v*_filter.txt
+reels_v*_subtitles.ass
 reels_v*_bilingual.ass
-reels_v2_subtitles.ass
+reels_v*.mp4
+soft_wind_chime.wav
+silence.log
+source_audio_16k.wav
 make_reels_v*.py
 transcribe_*.py
-reels_v2_content_notes.md
-reels_cover_v*.jpg
+reels_v*_content_notes.md
+
+# Generated transcript snapshots
+transcript_faster.json
+transcript_faster.srt
+transcript_faster.txt
+transcript_words.json
+
+# ─── Local logs ──────────────────────────────────────────────────────────
+*.log
+nohup.out

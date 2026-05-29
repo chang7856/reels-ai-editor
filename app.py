@@ -1,7 +1,9 @@
 import json
 import os
+import platform
 import shutil
 import subprocess
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -20,14 +22,61 @@ PIPELINE = ROOT / "reels_gui_pipeline.py"
 UPLOADS.mkdir(exist_ok=True)
 OUTPUTS.mkdir(exist_ok=True)
 
+
+def _preflight_check():
+    """Catch the two most common "why won't it start" problems and explain
+    them in plain language before Flask even boots."""
+    missing = [tool for tool in ("ffmpeg", "ffprobe") if shutil.which(tool) is None]
+    if missing:
+        installer = {
+            "Darwin": "brew install ffmpeg",
+            "Linux": "sudo apt install ffmpeg   # or your distro's equivalent",
+            "Windows": "winget install ffmpeg   # or download from https://ffmpeg.org",
+        }.get(platform.system(), "https://ffmpeg.org/download.html")
+        sys.stderr.write(
+            "\n"
+            "╭───────────────────────────────────────────────────────────────╮\n"
+            "│  Reels AI Editor — preflight check failed                      │\n"
+            "╰───────────────────────────────────────────────────────────────╯\n"
+            f"  Missing: {', '.join(missing)}\n\n"
+            "  This app uses ffmpeg to read the video and rebuild it after\n"
+            "  the auto-edit. Install it with:\n\n"
+            f"      {installer}\n\n"
+            "  Then re-open this window (or double-click start.command).\n\n"
+        )
+        sys.exit(1)
+
+    try:
+        import faster_whisper  # noqa: F401
+        from PIL import Image  # noqa: F401
+        from opencc import OpenCC  # noqa: F401
+    except ImportError as exc:
+        sys.stderr.write(
+            "\n"
+            "╭───────────────────────────────────────────────────────────────╮\n"
+            "│  Reels AI Editor — Python dependencies missing                 │\n"
+            "╰───────────────────────────────────────────────────────────────╯\n"
+            f"  {exc}\n\n"
+            "  Install everything with:\n\n"
+            "      pip3 install -r requirements.txt\n\n"
+        )
+        sys.exit(1)
+
+
+_preflight_check()
+
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 1_200 * 1024 * 1024
 jobs = {}
 
 MAX_DURATION_SECONDS = 600
-MAX_RETENTION_SECONDS = 3 * 60 * 60
+# Uploads + outputs + logs are wiped 15 minutes after the upload lands. The
+# user can grab the Reel + cover in seconds once it's rendered, so a tight
+# window protects their footage and keeps disk usage near-zero.
+MAX_RETENTION_SECONDS = 15 * 60
 ALLOWED_EXTENSIONS = {".mp4", ".mov", ".m4v"}
-ALLOWED_COVER_STYLES = {"editorial", "creator", "high_contrast"}
+ALLOWED_COVER_STYLES = {"editorial", "hook_caption", "magazine_pop", "creator", "high_contrast"}
+ALLOWED_LANGUAGES = {"zh", "en"}
 STAGE_MODEL = {
     "upload": {"start": 0, "end": 18, "label": "上傳影片"},
     "validate": {"start": 18, "end": 34, "label": "檢查格式與長度"},
@@ -188,12 +237,15 @@ def create_job():
     cleanup_old_files()
     file = request.files.get("video")
     cover_style = request.form.get("cover_style", "editorial")
+    language = (request.form.get("language") or "zh").lower()
     if not file or file.filename == "":
         return jsonify({"error": "請選擇影片檔"}), 400
     if not allowed(file.filename):
         return jsonify({"error": "目前只支援 mp4 / mov / m4v"}), 400
     if cover_style not in ALLOWED_COVER_STYLES:
         return jsonify({"error": "不支援的封面風格"}), 400
+    if language not in ALLOWED_LANGUAGES:
+        return jsonify({"error": "不支援的語言"}), 400
 
     job_id = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8]
     job_dir = OUTPUTS / job_id
@@ -215,9 +267,10 @@ def create_job():
     options_path = job_dir / "options.json"
     options_path.write_text(json.dumps({
         "cover_style": cover_style,
+        "language": language,
         "original_filename": original_name,
         "duration_seconds": duration,
-        "delete_after_hours": 3,
+        "delete_after_minutes": 15,
         "started_at": time.time(),
     }, ensure_ascii=False, indent=2))
 
@@ -282,6 +335,85 @@ def job_status(job_id):
     })
 
 
+@app.post("/jobs/<job_id>/cover")
+def regenerate_cover(job_id):
+    cleanup_old_files()
+    job_dir = OUTPUTS / job_id
+    result_path = job_dir / "result.json"
+    if not result_path.exists():
+        return jsonify({"error": "找不到這個任務或結果尚未完成"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    result = json.loads(result_path.read_text())
+    candidates = result.get("cover_candidates") or []
+
+    # `candidate` is optional — when only `style` is sent we stick with whichever
+    # candidate is currently selected so the user can flip palettes without
+    # losing their chosen frame.
+    candidate_name = (payload.get("candidate") or "").strip()
+    if not candidate_name:
+        candidate_name = result.get("selected_cover_candidate") or ""
+        selected = next((c for c in candidates if c.get("selected")), None)
+        if not candidate_name and selected:
+            candidate_name = selected["filename"]
+    if not candidate_name or "/" in candidate_name or "\\" in candidate_name:
+        return jsonify({"error": "請選擇一張候選封面"}), 400
+
+    candidate = next((item for item in candidates if item.get("filename") == candidate_name), None)
+    if not candidate:
+        return jsonify({"error": "找不到這張候選封面"}), 404
+
+    candidate_path = job_dir / candidate_name
+    if not candidate_path.exists():
+        return jsonify({"error": "候選封面已被清除，請重新上傳影片"}), 410
+
+    requested_style = (payload.get("style") or "").strip()
+    if requested_style and requested_style not in ALLOWED_COVER_STYLES:
+        return jsonify({"error": "不支援的封面風格"}), 400
+    requested_language = (payload.get("language") or "").lower().strip()
+    if requested_language and requested_language not in ALLOWED_LANGUAGES:
+        return jsonify({"error": "不支援的語言"}), 400
+
+    # Import lazily so the Flask process does not need to load Whisper at boot.
+    from reels_gui_pipeline import render_cover
+
+    memory = result.get("memory") or json.loads(MEMORY.read_text())
+    cover_copy = result.get("cover_copy")
+    style = (
+        requested_style
+        or result.get("cover_style")
+        or (cover_copy or {}).get("default_style")
+        or "editorial"
+    )
+    language = requested_language or result.get("language") or "zh"
+    cover_path = job_dir / result["cover"]
+    cover_base = cover_path.with_name("cover_base.jpg")
+    shutil.copy2(candidate_path, cover_base)
+
+    try:
+        render_cover(cover_base, cover_path, memory, cover_copy, style, language=language)
+    except Exception as error:
+        return jsonify({"error": f"重新產生封面失敗：{error}"}), 500
+
+    for item in candidates:
+        item["selected"] = item.get("filename") == candidate_name
+    result["cover_candidates"] = candidates
+    result["selected_cover_candidate"] = candidate_name
+    result["cover_style"] = style
+    result["language"] = language
+    result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2))
+
+    cover_url = f"/outputs/{job_id}/{result['cover']}?t={int(time.time())}"
+    return jsonify({
+        "job_id": job_id,
+        "selected_cover_candidate": candidate_name,
+        "cover_style": style,
+        "language": language,
+        "cover_url": cover_url,
+        "cover_candidates": candidates,
+    })
+
+
 @app.get("/outputs/<job_id>/<path:filename>")
 def output_file(job_id, filename):
     cleanup_old_files()
@@ -306,7 +438,7 @@ def output_file(job_id, filename):
             <body>
               <main>
                 <h1>檔案已清除或不存在</h1>
-                <p>輸出的 Reels 影片與封面會在 3 小時後自動刪除。請回到主頁重新上傳影片產生新版本。</p>
+                <p>輸出的 Reels 影片與封面會在上傳 15 分鐘後自動刪除。請回到主頁重新上傳影片產生新版本。</p>
                 <a href="/">回到 Reels AI Editor</a>
               </main>
             </body>

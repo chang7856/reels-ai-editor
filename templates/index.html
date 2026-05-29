@@ -270,6 +270,31 @@
       border-color: #15171c;
       box-shadow: inset 0 0 0 2px #15171c;
     }
+    .cover-picker.locked .cover-option {
+      cursor: not-allowed;
+      opacity: .55;
+    }
+    .cover-picker.locked .cover-option:not(:has(input:checked)) {
+      pointer-events: none;
+    }
+    .cover-picker.locked .cover-option:has(input:checked) {
+      opacity: 1;
+      cursor: default;
+      pointer-events: none;
+    }
+    .cover-lock-hint {
+      display: none;
+      margin: 12px 0 0;
+      padding: 10px 12px;
+      border: 1px solid #edf0f3;
+      border-left: 4px solid var(--teal);
+      border-radius: 8px;
+      background: rgba(47, 127, 117, .06);
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .cover-picker.locked .cover-lock-hint { display: block; }
     .thumb {
       height: 80px;
       margin-bottom: 10px;
@@ -290,11 +315,40 @@
     }
     .thumb::before { top: 26px; }
     .thumb::after { top: 44px; width: 55%; right: auto; background: var(--accent); }
-    .thumb.creator { background: var(--paper); }
-    .thumb.creator::before { background: #15171c; }
-    .thumb.creator::after { background: var(--teal); }
-    .thumb.contrast { background: #050608; }
-    .thumb.contrast::after { background: var(--coral); }
+    .thumb.hook {
+      background: linear-gradient(135deg, #20232a 0%, #2c2e36 100%);
+    }
+    .thumb.hook::before {
+      background: #ffffff;
+      top: 38px;
+      left: 14px;
+      right: 14px;
+      height: 11px;
+    }
+    .thumb.hook::after {
+      background: #ffe63c;
+      top: 54px;
+      left: 22px;
+      width: 40%;
+      height: 11px;
+    }
+    .thumb.pop {
+      background: linear-gradient(135deg, #463125 0%, #2c1e1a 100%);
+    }
+    .thumb.pop::before {
+      background: #f58a38;  /* orange line */
+      top: 32px;
+      left: 14px;
+      right: 14px;
+      height: 11px;
+    }
+    .thumb.pop::after {
+      background: #96de4e;  /* lime line */
+      top: 50px;
+      left: 14px;
+      right: 14px;
+      height: 11px;
+    }
     .cover-name {
       display: block;
       margin-left: 24px;
@@ -526,14 +580,165 @@
       line-height: 1.45;
       white-space: pre-wrap;
     }
-    .log-hidden { display: none; }
     .result {
       display: none;
       margin-top: 16px;
-      gap: 12px;
-      flex-wrap: wrap;
+      flex-direction: column;
+      gap: 16px;
     }
     .result.show { display: flex; }
+    .result-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .cover-preview {
+      display: grid;
+      grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .cover-preview img {
+      width: 100%;
+      aspect-ratio: 9 / 16;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #15171c;
+      box-shadow: 0 12px 36px rgba(20, 24, 31, .14);
+    }
+    .cover-info h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+    }
+    .cover-info p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .cover-info .status-line {
+      margin-top: 10px;
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--teal);
+      min-height: 18px;
+    }
+    .cover-info .status-line.bad { color: var(--bad); }
+    .style-switcher {
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .style-switcher-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+    .style-pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .style-pill {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 900;
+      padding: 8px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease;
+    }
+    .style-pill:hover:not(:disabled) {
+      border-color: #15171c;
+    }
+    .style-pill.selected {
+      background: #15171c;
+      border-color: #15171c;
+      color: #fff;
+    }
+    .style-pill:disabled {
+      opacity: .55;
+      cursor: progress;
+    }
+    .candidates {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .candidates h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+    .candidates p.hint {
+      margin: 4px 0 12px;
+      font-size: 13px;
+    }
+    .candidate-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+    }
+    .candidate {
+      position: relative;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #15171c;
+      cursor: pointer;
+      padding: 0;
+      aspect-ratio: 9 / 16;
+    }
+    .candidate img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .candidate .meta {
+      position: absolute;
+      left: 6px;
+      bottom: 6px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, .55);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .02em;
+    }
+    .candidate.selected {
+      border-color: #15171c;
+      box-shadow: 0 0 0 3px var(--accent);
+    }
+    .candidate.selected::after {
+      content: "✓";
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #15171c;
+      font-weight: 900;
+      display: grid;
+      place-items: center;
+      font-size: 13px;
+    }
+    .candidate:disabled {
+      opacity: .55;
+      cursor: progress;
+    }
     .download {
       display: inline-flex;
       align-items: center;
@@ -678,28 +883,29 @@
             </div>
           </div>
 
-          <div class="cover-picker">
+          <div class="cover-picker" id="coverPicker">
             <div class="panel-head">
               <h2 data-i18n="coverTitle">Cover 風格</h2>
             </div>
+            <p class="cover-lock-hint" data-i18n="coverLockHint">影片產出後這裡會鎖住。要換樣式請用下面「切換封面風格」；要換樣式之外的東西，請按「再剪一支影片」重新上傳。</p>
             <div class="cover-grid">
               <label class="cover-option">
                 <input type="radio" name="cover_style" value="editorial" checked>
                 <div class="thumb"></div>
                 <span class="cover-name" data-i18n="coverEditorialName">雜誌大標</span>
-                <span class="cover-desc" data-i18n="coverEditorialDesc">白字加黃色重點，最像知識型 Reels 封面。</span>
+                <span class="cover-desc" data-i18n="coverEditorialDesc">黑底白字加黃色重點，最像知識型 Reels 封面。</span>
               </label>
               <label class="cover-option">
-                <input type="radio" name="cover_style" value="creator">
-                <div class="thumb creator"></div>
-                <span class="cover-name" data-i18n="coverCreatorName">創作者清爽</span>
-                <span class="cover-desc" data-i18n="coverCreatorDesc">留更多臉部空間，字體更乾淨。</span>
+                <input type="radio" name="cover_style" value="hook_caption">
+                <div class="thumb hook"></div>
+                <span class="cover-name" data-i18n="coverHookName">全白爆點</span>
+                <span class="cover-desc" data-i18n="coverHookDesc">大白字＋一個高亮詞，像 Hormozi、Gary V 那種 TikTok 風格。</span>
               </label>
               <label class="cover-option">
-                <input type="radio" name="cover_style" value="high_contrast">
-                <div class="thumb contrast"></div>
-                <span class="cover-name" data-i18n="coverContrastName">高對比爆點</span>
-                <span class="cover-desc" data-i18n="coverContrastDesc">強陰影與底部 hook，適合提高停留率。</span>
+                <input type="radio" name="cover_style" value="magazine_pop">
+                <div class="thumb pop"></div>
+                <span class="cover-name" data-i18n="coverPopName">繽紛大字</span>
+                <span class="cover-desc" data-i18n="coverPopDesc">全幅淡淡黑色蒙版＋橘色＋萊姆綠的雙色標題，沒有 POV 也沒有底部 hook。</span>
               </label>
             </div>
           </div>
@@ -734,7 +940,6 @@
             <div id="errorTitle" class="error-title"></div>
             <div id="errorHelp" class="error-help"></div>
           </div>
-          <pre id="log" class="log-hidden"></pre>
           <div id="result" class="result"></div>
         </div>
       </section>
@@ -753,13 +958,12 @@
         <section class="info">
           <h2 data-i18n="memoryTitle">已寫進程式的記憶</h2>
           <div class="memory">
-            <div class="row"><span class="key" data-i18n="memoryTitleLabel">標題</span><span class="value">{{ memory.title }}</span></div>
+            <div class="row"><span class="key" data-i18n="memoryTitleLabel">標題</span><span class="value" data-title-zh="{{ memory.title }}" data-title-en="{{ memory.title_en }}">{{ memory.title }}</span></div>
             <div class="row"><span class="key" data-i18n="memorySubtitleLabel">字幕</span><span class="value" data-i18n="memorySubtitleValue">繁中 + 英文、置中、安全區</span></div>
-            <div class="row"><span class="key" data-i18n="memoryZhSpacing">中文字距</span><span class="value">{{ memory.subtitle.chinese_letter_spacing }}</span></div>
-            <div class="row"><span class="key" data-i18n="memoryEnSize">英文字級</span><span class="value">{{ memory.subtitle.english_font_size }}</span></div>
+            <div class="row"><span class="key" data-i18n="memoryCaptionSize">字幕大小</span><span class="value">{{ memory.subtitle.english_font_size }}</span></div>
             <div class="row"><span class="key" data-i18n="memorySpeed">速度模式</span><span class="value">{{ memory.performance.mode }} / {{ memory.performance.whisper_model }}</span></div>
             <div class="row"><span class="key" data-i18n="memorySize">輸出尺寸</span><span class="value">{{ memory.export.width }} x {{ memory.export.height }}</span></div>
-            <div class="row"><span class="key" data-i18n="memoryBitrate">影片碼率</span><span class="value">{{ memory.export.video_bitrate }}</span></div>
+            <div class="row"><span class="key" data-i18n="memoryQuality">畫質 (CRF)</span><span class="value">{{ memory.export.crf }}</span></div>
           </div>
         </section>
 
@@ -771,7 +975,7 @@
     </div>
 
     <footer>
-      <span data-i18n="footerNote">Built for fast Reels production.</span>
+      <span data-i18n="lastUpdate">最後更新 2026.05</span>
       <span>Contributed by <a href="https://www.linkedin.com/in/taofang-chang" target="_blank" rel="noopener noreferrer">Jessie.D.Chang</a></span>
     </footer>
   </main>
@@ -782,7 +986,6 @@
     const submit = document.getElementById("submit");
     const statusBox = document.getElementById("status");
     const state = document.getElementById("state");
-    const log = document.getElementById("log");
     const result = document.getElementById("result");
     const progressBar = document.getElementById("progressBar");
     const uploadPct = document.getElementById("uploadPct");
@@ -813,22 +1016,22 @@
       zh: {
         brand: "Reels production desk",
         heroTitle: "把原始影片變成可上傳的 Reels。",
-        heroSubtitle: "上傳 10 分鐘內的影片，自動剪停頓、上雙語字幕、產生封面，並輸出手機好傳的 IG Reels 壓縮版。",
+        heroSubtitle: "把你對著鏡頭講話的影片自動剪成 IG 直式 Reels — 剪停頓、上雙語字幕、產生封面。10 分鐘內的影片、僅限對鏡頭講話的內容。",
         uploadTitle: "上傳與輸出設定",
         freeBadge: "免費本機版",
         chooseFile: "選擇影片",
-        uploadHint: "支援 MP4 / MOV / M4V，最長 10 分鐘。完成後輸出 Reels 影片與封面，檔案 3 小時後自動刪除。",
+        uploadHint: "支援 MP4 / MOV / M4V，最長 10 分鐘。完成後輸出 Reels 影片與封面，檔案 15 分鐘後自動刪除。",
         formatLine: "格式限制：.mp4 / .mov / .m4v，不接受可執行檔或壓縮檔。",
         coverTitle: "Cover 風格",
         coverEditorialName: "雜誌大標",
-        coverEditorialDesc: "白字加黃色重點，最像知識型 Reels 封面。",
-        coverCreatorName: "創作者清爽",
-        coverCreatorDesc: "留更多臉部空間，字體更乾淨。",
-        coverContrastName: "高對比爆點",
-        coverContrastDesc: "強陰影與底部 hook，適合提高停留率。",
+        coverEditorialDesc: "黑底白字加黃色重點，最像知識型 Reels 封面。",
+        coverLockHint: "影片產出後這裡會鎖住。要換樣式請用下面「切換封面風格」；要換影片或樣式以外的東西，請按「再剪一支影片」重新上傳。",
+        coverHookName: "全白爆點",
+        coverHookDesc: "大白字＋一個高亮詞，像 Hormozi、Gary V 那種 TikTok 風格。",
+        coverPopName: "繽紛大字",
+        coverPopDesc: "全幅淡淡黑色蒙版＋橘色＋萊姆綠的雙色標題，沒有 POV 也沒有底部 hook。",
         startButton: "開始自動剪輯",
         workingButton: "正在處理",
-        noFile: "尚未選擇檔案",
         fileReady: "可以上傳",
         fileNeedsFix: "需調整",
         fileMeta: "格式：{type} · 大小：{size}",
@@ -867,11 +1070,20 @@
         openVideo: "開啟 Reels 影片",
         openCover: "開啟封面",
         resetButton: "再剪一支影片",
+        coverPreviewTitle: "目前的封面",
+        coverPreviewDesc: "符合 IG Reels 安全區，重要文字不會被介面遮住。",
+        coverStyleSwitcherLabel: "切換封面風格：",
+        coverPickerTitle: "封面候選",
+        coverPickerHelp: "從下面挑一張畫面當封面，按一下會立刻換新封面。",
+        coverCandidateLabel: "第 {index} 張 · {seek}s",
+        coverUpdating: "正在更新封面…",
+        coverUpdated: "封面已更新",
+        coverUpdateFailed: "封面更新失敗，請再試一次",
         rulesTitle: "上傳規則與資安",
         ruleDurationTitle: "最長 10 分鐘",
         ruleDurationText: "上傳後會先用 FFprobe 驗證長度，超過就拒絕處理。",
-        ruleDeleteTitle: "3 小時後刪除",
-        ruleDeleteText: "上傳檔、輸出影片、封面與 log 會在本機自動清除。",
+        ruleDeleteTitle: "15 分鐘後刪除",
+        ruleDeleteText: "上傳檔、輸出影片、封面與 log 都在 15 分鐘內清掉，留 token 時間給你下載完。",
         ruleFormatTitle: "只收影片格式",
         ruleFormatText: "白名單只允許 MP4、MOV、M4V，檔名會清理，避免任意路徑。",
         ruleFreeTitle: "免費方案",
@@ -880,34 +1092,33 @@
         memoryTitleLabel: "標題",
         memorySubtitleLabel: "字幕",
         memorySubtitleValue: "繁中 + 英文、置中、安全區",
-        memoryZhSpacing: "中文字距",
-        memoryEnSize: "英文字級",
+        memoryCaptionSize: "字幕大小",
         memorySpeed: "速度模式",
         memorySize: "輸出尺寸",
-        memoryBitrate: "影片碼率",
-        privacyTitle: "Local-first privacy",
-        privacyText: "目前是免費本機版：影片只存在這台電腦。若要變成公開網站，建議仍保留 10 分鐘限制、3 小時刪除與檔案白名單。",
-        footerNote: "Built for fast Reels production."
+        memoryQuality: "畫質 (CRF)",
+        privacyTitle: "影片不會留下來",
+        privacyText: "你的影片只在這台電腦處理，不會上傳到任何第三方服務。處理完 15 分鐘後，原檔、輸出、封面、log 一起被刪除——我們不會留檔。",
+        lastUpdate: "最後更新 2026.05"
       },
       en: {
         brand: "Reels production desk",
         heroTitle: "Turn raw footage into upload-ready Reels.",
-        heroSubtitle: "Upload videos up to 10 minutes, remove pauses, add bilingual subtitles, generate a cover, and export a phone-friendly IG Reels MP4.",
+        heroSubtitle: "Turn talking-head footage into a vertical IG Reel — pauses cut, English captions burned in, cover generated. Up to 10 minutes; only works for footage of you talking to the camera.",
         uploadTitle: "Upload & Export Settings",
         freeBadge: "Free local mode",
         chooseFile: "Choose Video",
-        uploadHint: "Supports MP4 / MOV / M4V up to 10 minutes. The video, cover, and logs are deleted after 3 hours.",
+        uploadHint: "Supports MP4 / MOV / M4V up to 10 minutes. The video, cover, and logs are deleted 15 minutes after upload.",
         formatLine: "Allowed formats: .mp4 / .mov / .m4v. Executables and archives are rejected.",
         coverTitle: "Cover Style",
         coverEditorialName: "Editorial Bold",
-        coverEditorialDesc: "White type with yellow emphasis for knowledge-style Reels.",
-        coverCreatorName: "Clean Creator",
-        coverCreatorDesc: "More face space and cleaner typography.",
-        coverContrastName: "High Contrast Hook",
-        coverContrastDesc: "Stronger shadows and a bottom hook for retention.",
+        coverEditorialDesc: "Black band + marigold accent, the knowledge-Reels classic.",
+        coverLockHint: "This locks once the Reel is generated. Switch styles below in \"Try another style\", or click \"Edit Another Video\" to start a new upload.",
+        coverHookName: "All-White Hook",
+        coverHookDesc: "Hormozi / Gary V TikTok captions — big white text with one neon highlight word.",
+        coverPopName: "Color Pop",
+        coverPopDesc: "Faint full-frame black scrim + two-line headline in orange & lime. No POV, no bottom hook.",
         startButton: "Start Auto Edit",
         workingButton: "Working",
-        noFile: "No file selected",
         fileReady: "Ready",
         fileNeedsFix: "Needs fix",
         fileMeta: "Format: {type} · Size: {size}",
@@ -923,7 +1134,7 @@
         processingDetail: "Video received. Analysis is starting.",
         processingUploadDetail: "Uploading the video into the local workspace.",
         processingValidateDetail: "Checking duration, format, and safety rules.",
-        processingTranscribeDetail: "Listening to the content and preparing bilingual subtitles.",
+        processingTranscribeDetail: "Listening to the content and translating it into English captions.",
         processingRenderDetail: "Removing filler, cutting pauses, and exporting the compressed Reel and cover.",
         processingDoneDetail: "The video and cover are ready.",
         elapsedLabel: "Elapsed",
@@ -946,11 +1157,20 @@
         openVideo: "Open Reels Video",
         openCover: "Open Cover",
         resetButton: "Edit Another Video",
+        coverPreviewTitle: "Current cover",
+        coverPreviewDesc: "Lays out inside the Reels safe area — key text stays clear of the IG UI.",
+        coverStyleSwitcherLabel: "Try another style:",
+        coverPickerTitle: "Cover candidates",
+        coverPickerHelp: "Pick the frame you like — tapping it swaps the cover instantly.",
+        coverCandidateLabel: "Pick {index} · {seek}s",
+        coverUpdating: "Updating cover…",
+        coverUpdated: "Cover updated",
+        coverUpdateFailed: "Could not update the cover, please try again",
         rulesTitle: "Upload Rules & Security",
         ruleDurationTitle: "10 minutes max",
         ruleDurationText: "The app validates duration with FFprobe before processing and rejects longer videos.",
-        ruleDeleteTitle: "Deleted after 3 hours",
-        ruleDeleteText: "Uploads, exports, covers, and logs are cleaned up locally.",
+        ruleDeleteTitle: "Deleted after 15 minutes",
+        ruleDeleteText: "Source upload, exported Reel, cover, and logs are all wiped within 15 minutes — enough time to grab your files.",
         ruleFormatTitle: "Video formats only",
         ruleFormatText: "Only MP4, MOV, and M4V are allowed. Filenames are sanitized to prevent arbitrary paths.",
         ruleFreeTitle: "Free solution",
@@ -958,15 +1178,14 @@
         memoryTitle: "Saved Editing Preferences",
         memoryTitleLabel: "Title",
         memorySubtitleLabel: "Subtitles",
-        memorySubtitleValue: "Traditional Chinese + English, centered, safe area",
-        memoryZhSpacing: "Chinese spacing",
-        memoryEnSize: "English size",
+        memorySubtitleValue: "English only, centered, safe area",
+        memoryCaptionSize: "Caption size",
         memorySpeed: "Speed mode",
         memorySize: "Output size",
-        memoryBitrate: "Video bitrate",
-        privacyTitle: "Local-first privacy",
-        privacyText: "This is currently a free local app: videos stay on this computer. For a public website, keep the 10-minute limit, 3-hour deletion, and file whitelist.",
-        footerNote: "Built for fast Reels production."
+        memoryQuality: "Quality (CRF)",
+        privacyTitle: "Your video doesn't stick around",
+        privacyText: "Your footage is processed on this machine — never sent to a third-party service. 15 minutes after the upload lands, the source file, exported Reel, cover, and logs are all deleted. No copies kept.",
+        lastUpdate: "Last Update 2026.05"
       }
     };
 
@@ -975,6 +1194,7 @@
     }
 
     function applyLanguage(lang) {
+      const previous = currentLang;
       currentLang = lang;
       localStorage.setItem("reels-lang", lang);
       document.documentElement.lang = lang === "zh" ? "zh-Hant" : "en";
@@ -983,7 +1203,78 @@
       document.querySelectorAll("[data-i18n]").forEach((node) => {
         node.textContent = t(node.dataset.i18n);
       });
+      // Memory-panel title flips between Chinese / English so it reflects
+      // what will actually be burnt in for the chosen language mode.
+      document.querySelectorAll("[data-title-zh]").forEach((node) => {
+        node.textContent = lang === "en"
+          ? (node.dataset.titleEn || node.dataset.titleZh)
+          : node.dataset.titleZh;
+      });
       renderFileCard(video.files[0]);
+      // If a finished job is on screen, re-render the cover + relabel pills in
+      // the new language so the user sees the change immediately.
+      if (previous && previous !== lang && result.classList.contains("show") && result.dataset.jobId) {
+        relabelStylePills();
+        regenerateCoverForLanguage(result.dataset.jobId, lang);
+      }
+    }
+
+    function relabelStylePills() {
+      const switcher = document.getElementById("styleSwitcher");
+      if (!switcher) return;
+      switcher.querySelectorAll("button.style-pill").forEach((button) => {
+        const value = button.dataset.style;
+        button.textContent = (COVER_STYLE_LABELS[value] || {})[currentLang] || value;
+      });
+      const previewTitle = result.querySelector("h3");
+      // i18n text nodes inside the cover-info block don't carry data-i18n so
+      // we refresh them here.
+      const titleNode = result.querySelector(".cover-info h3");
+      if (titleNode) titleNode.textContent = t("coverPreviewTitle");
+      const descNode = result.querySelector(".cover-info p");
+      if (descNode) descNode.textContent = t("coverPreviewDesc");
+      const switcherLabel = result.querySelector(".style-switcher-label");
+      if (switcherLabel) switcherLabel.textContent = t("coverStyleSwitcherLabel");
+      const pickerTitle = result.querySelector(".candidates h3");
+      if (pickerTitle) pickerTitle.textContent = t("coverPickerTitle");
+      const pickerHelp = result.querySelector(".candidates p.hint");
+      if (pickerHelp) pickerHelp.textContent = t("coverPickerHelp");
+      const downloadButtons = result.querySelectorAll(".result-actions .download");
+      if (downloadButtons.length >= 2) {
+        downloadButtons[0].textContent = t("openVideo");
+        downloadButtons[1].textContent = t("openCover");
+      }
+      const resetBtn = document.getElementById("resetFlow");
+      if (resetBtn) resetBtn.textContent = t("resetButton");
+    }
+
+    async function regenerateCoverForLanguage(jobId, lang) {
+      const statusLine = document.getElementById("coverStatusLine");
+      if (statusLine) {
+        statusLine.classList.remove("bad");
+        statusLine.textContent = t("coverUpdating");
+      }
+      try {
+        const response = await fetch(`/jobs/${jobId}/cover`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ language: lang === "en" ? "en" : "zh" }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || t("coverUpdateFailed"));
+        }
+        const coverImage = document.getElementById("coverImage");
+        const openCoverLink = document.getElementById("openCoverLink");
+        if (coverImage) coverImage.src = payload.cover_url;
+        if (openCoverLink) openCoverLink.href = payload.cover_url;
+        if (statusLine) statusLine.textContent = t("coverUpdated");
+      } catch (error) {
+        if (statusLine) {
+          statusLine.classList.add("bad");
+          statusLine.textContent = error.message || t("coverUpdateFailed");
+        }
+      }
     }
 
     langZh.addEventListener("click", () => applyLanguage("zh"));
@@ -1118,11 +1409,11 @@
       statusBox.classList.remove("show");
       clearError();
       hideProcessing();
+      progressBar.style.display = "";
+      document.querySelectorAll(".stage-list").forEach((node) => node.style.display = "");
       setProgress(0, "determinate");
       uploadPct.textContent = "0%";
       ["upload", "validate", "transcribe", "render"].forEach((stage) => setStageBar(stage, 0));
-      log.textContent = "";
-      log.classList.add("log-hidden");
       document.querySelectorAll(".stage").forEach((node) => {
         node.classList.remove("active", "done");
       });
@@ -1133,11 +1424,13 @@
       errorTitle.textContent = message || t("errorTitle");
       errorHelp.textContent = t(helpKey || "errorGenericHelp");
       errorCard.classList.add("show");
-      log.classList.add("log-hidden");
       state.innerHTML = `<span class="error">${message || t("failed")}</span>`;
       hideProcessing();
       setProgress(0, "determinate");
       submit.disabled = false;
+      // If anything failed we hand the form back to the user, so the Cover
+      // Style picker should be editable again.
+      unlockTopCoverStyle();
     }
 
     function validateSelectedFile(file) {
@@ -1309,18 +1602,24 @@
       result.innerHTML = "";
       clearError();
       hideProcessing();
+      progressBar.style.display = "";
+      document.querySelectorAll(".stage-list").forEach((node) => node.style.display = "");
       uploadStartedAt = Date.now();
       setStage("upload");
       setProgress(0, "determinate");
       uploadPct.textContent = "0%";
       state.textContent = t("uploading");
-      log.textContent = "";
-      log.classList.add("log-hidden");
 
       const data = new FormData();
       data.append("video", video.files[0]);
       const selectedStyle = document.querySelector("input[name='cover_style']:checked");
-      data.append("cover_style", selectedStyle ? selectedStyle.value : "editorial");
+      const lockedStyle = selectedStyle ? selectedStyle.value : "editorial";
+      data.append("cover_style", lockedStyle);
+      data.append("language", currentLang === "en" ? "en" : "zh");
+      // From this moment the user committed to that Cover Style. Lock the top
+      // radios so the only way to change style is the bottom "Try another
+      // style" pills (or starting a brand new upload).
+      lockTopCoverStyle(lockedStyle);
       let created;
       try {
         created = await uploadJob(data);
@@ -1328,6 +1627,7 @@
         const message = error.payload && error.payload.error ? error.payload.error : t("uploadFailed");
         showError(message, error.network ? "errorNetworkHelp" : errorHelpKey(message, error.status));
         submit.textContent = t("startButton");
+        unlockTopCoverStyle();
         return;
       }
       localStorage.setItem(activeJobKey, created.job_id);
@@ -1374,11 +1674,8 @@
         submit.textContent = t("startButton");
         return;
       }
-      log.textContent = data.log || "";
-      log.classList.toggle("log-hidden", !(data.log || "").trim());
-      log.scrollTop = log.scrollHeight;
       updateStageFromLog(data.log || "");
-      if (data.progress) {
+      if (data.status === "running" && data.progress) {
         showProcessing(data.progress);
       }
 
@@ -1396,29 +1693,215 @@
         return;
       }
 
+      // Tear the processing UI down now that we're done — the spinning loader
+      // and 100% chip looked like it was still working after the cover landed.
+      hideProcessing();
+      progressBar.classList.remove("determinate");
+      progressBar.style.removeProperty("--progress");
+      progressBar.style.display = "none";
+      document.querySelectorAll(".stage-list").forEach((node) => node.style.display = "none");
       state.innerHTML = `<span class="ok">${t("done")}</span>`;
-      showProcessing({ percent: 100, stage: "done", elapsed_seconds: data.progress && data.progress.elapsed_seconds, eta_seconds: 0 });
-      setProgress(100, "determinate");
-      document.querySelectorAll(".stage").forEach((node) => {
-        node.classList.remove("active");
-        node.classList.add("done");
-      });
       const videoUrl = `/outputs/${jobId}/${data.result.video}`;
-      const coverUrl = `/outputs/${jobId}/${data.result.cover}`;
+      const coverUrl = `/outputs/${jobId}/${data.result.cover}?t=${Date.now()}`;
+      renderResult(jobId, videoUrl, coverUrl, data.result.cover_candidates || [], data.result.cover_style);
+    }
+
+    const COVER_STYLE_LABELS = {
+      editorial: { zh: "雜誌大標", en: "Editorial Bold" },
+      hook_caption: { zh: "全白爆點", en: "All-White Hook" },
+      magazine_pop: { zh: "繽紛大字", en: "Color Pop" },
+      // Legacy aliases kept so old jobs in localStorage still surface labels.
+      creator: { zh: "全白爆點", en: "All-White Hook" },
+      high_contrast: { zh: "繽紛大字", en: "Color Pop" },
+    };
+
+    const STYLE_SWITCHER_ORDER = ["editorial", "hook_caption", "magazine_pop"];
+
+    function activeCoverStyle() {
+      const checked = document.querySelector("input[name='cover_style']:checked");
+      return checked ? checked.value : "editorial";
+    }
+
+    function renderResult(jobId, videoUrl, coverUrl, candidates, initialStyle) {
+      const styleNow = initialStyle || activeCoverStyle();
+      const styleButtons = STYLE_SWITCHER_ORDER.map((value) => {
+        const label = (COVER_STYLE_LABELS[value] || {})[currentLang] || value;
+        const cls = "style-pill" + (value === styleNow ? " selected" : "");
+        return `<button type="button" class="${cls}" data-style="${value}">${label}</button>`;
+      }).join("");
+      const styleSwitcherMarkup = `
+        <div class="style-switcher">
+          <span class="style-switcher-label">${t("coverStyleSwitcherLabel")}</span>
+          <div class="style-pill-row" id="styleSwitcher">${styleButtons}</div>
+        </div>
+      `;
+      const candidateMarkup = candidates.length
+        ? `
+          <section class="candidates">
+            <h3>${t("coverPickerTitle")}</h3>
+            <p class="hint">${t("coverPickerHelp")}</p>
+            <div class="candidate-grid" id="candidateGrid"></div>
+          </section>
+        `
+        : "";
       result.innerHTML = `
-        <a class="download" href="${videoUrl}" target="_blank">${t("openVideo")}</a>
-        <a class="download" href="${coverUrl}" target="_blank">${t("openCover")}</a>
-        <button class="primary" id="resetFlow" type="button">${t("resetButton")}</button>
+        <section class="cover-preview">
+          <img id="coverImage" src="${coverUrl}" alt="${t("openCover")}">
+          <div class="cover-info">
+            <h3>${t("coverPreviewTitle")}</h3>
+            <p>${t("coverPreviewDesc")}</p>
+            ${styleSwitcherMarkup}
+            <div id="coverStatusLine" class="status-line"></div>
+          </div>
+        </section>
+        ${candidateMarkup}
+        <div class="result-actions">
+          <a class="download" href="${videoUrl}" target="_blank">${t("openVideo")}</a>
+          <a class="download" id="openCoverLink" href="${coverUrl}" target="_blank">${t("openCover")}</a>
+          <button class="primary" id="resetFlow" type="button">${t("resetButton")}</button>
+        </div>
       `;
       result.classList.add("show");
+      result.dataset.jobId = jobId;
+      result.dataset.style = styleNow;
+      if (candidates.length) {
+        renderCandidates(jobId, candidates);
+      }
+      const switcher = document.getElementById("styleSwitcher");
+      if (switcher) {
+        switcher.querySelectorAll("button.style-pill").forEach((button) => {
+          button.addEventListener("click", () => switchCoverStyle(jobId, button.dataset.style, switcher));
+        });
+      }
+      // Lock the top form's Cover Style radios. While a Reel is on screen,
+      // the *only* place to change the cover style is the result panel.
+      lockTopCoverStyle(styleNow);
       document.getElementById("resetFlow").addEventListener("click", () => {
         localStorage.removeItem(activeJobKey);
         video.value = "";
         renderFileCard(null);
         result.classList.remove("show");
         result.innerHTML = "";
+        unlockTopCoverStyle();
         resetProgressUi();
       });
+    }
+
+    function lockTopCoverStyle(selectedStyle) {
+      const picker = document.getElementById("coverPicker");
+      if (!picker) return;
+      picker.classList.add("locked");
+      picker.querySelectorAll("input[name='cover_style']").forEach((radio) => {
+        radio.disabled = true;
+        radio.checked = radio.value === selectedStyle;
+      });
+    }
+
+    function unlockTopCoverStyle() {
+      const picker = document.getElementById("coverPicker");
+      if (!picker) return;
+      picker.classList.remove("locked");
+      picker.querySelectorAll("input[name='cover_style']").forEach((radio) => {
+        radio.disabled = false;
+      });
+    }
+
+    async function switchCoverStyle(jobId, style, switcher) {
+      if (!style) return;
+      if (result.dataset.style === style) return;
+      const statusLine = document.getElementById("coverStatusLine");
+      switcher.querySelectorAll("button.style-pill").forEach((node) => { node.disabled = true; });
+      if (statusLine) {
+        statusLine.classList.remove("bad");
+        statusLine.textContent = t("coverUpdating");
+      }
+      try {
+        const response = await fetch(`/jobs/${jobId}/cover`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ style, language: currentLang === "en" ? "en" : "zh" }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || t("coverUpdateFailed"));
+        }
+        const coverImage = document.getElementById("coverImage");
+        const openCoverLink = document.getElementById("openCoverLink");
+        if (coverImage) coverImage.src = payload.cover_url;
+        if (openCoverLink) openCoverLink.href = payload.cover_url;
+        result.dataset.style = payload.cover_style || style;
+        switcher.querySelectorAll("button.style-pill").forEach((node) => {
+          node.classList.toggle("selected", node.dataset.style === (payload.cover_style || style));
+        });
+        // Sync the radio at the top so the next upload keeps the chosen palette.
+        const radio = document.querySelector(`input[name='cover_style'][value='${payload.cover_style || style}']`);
+        if (radio) radio.checked = true;
+        if (statusLine) statusLine.textContent = t("coverUpdated");
+      } catch (error) {
+        if (statusLine) {
+          statusLine.classList.add("bad");
+          statusLine.textContent = error.message || t("coverUpdateFailed");
+        }
+      } finally {
+        switcher.querySelectorAll("button.style-pill").forEach((node) => { node.disabled = false; });
+      }
+    }
+
+    function renderCandidates(jobId, candidates) {
+      const grid = document.getElementById("candidateGrid");
+      if (!grid) return;
+      grid.innerHTML = "";
+      candidates.forEach((candidate, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "candidate" + (candidate.selected ? " selected" : "");
+        button.dataset.filename = candidate.filename;
+        button.innerHTML = `
+          <img src="/outputs/${jobId}/${candidate.filename}?t=${Date.now()}" alt="">
+          <span class="meta">${t("coverCandidateLabel")
+            .replace("{index}", index + 1)
+            .replace("{seek}", (candidate.seek_seconds || 0).toFixed(1))}</span>
+        `;
+        button.addEventListener("click", () => selectCandidate(jobId, candidate.filename, button));
+        grid.appendChild(button);
+      });
+    }
+
+    async function selectCandidate(jobId, filename, button) {
+      const grid = button.parentElement;
+      const statusLine = document.getElementById("coverStatusLine");
+      if (!grid) return;
+      grid.querySelectorAll("button.candidate").forEach((node) => { node.disabled = true; });
+      if (statusLine) {
+        statusLine.classList.remove("bad");
+        statusLine.textContent = t("coverUpdating");
+      }
+      try {
+        const response = await fetch(`/jobs/${jobId}/cover`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ candidate: filename, language: currentLang === "en" ? "en" : "zh" }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || t("coverUpdateFailed"));
+        }
+        grid.querySelectorAll("button.candidate").forEach((node) => {
+          node.classList.toggle("selected", node.dataset.filename === filename);
+        });
+        const coverImage = document.getElementById("coverImage");
+        const openCoverLink = document.getElementById("openCoverLink");
+        if (coverImage) coverImage.src = payload.cover_url;
+        if (openCoverLink) openCoverLink.href = payload.cover_url;
+        if (statusLine) statusLine.textContent = t("coverUpdated");
+      } catch (error) {
+        if (statusLine) {
+          statusLine.classList.add("bad");
+          statusLine.textContent = error.message || t("coverUpdateFailed");
+        }
+      } finally {
+        grid.querySelectorAll("button.candidate").forEach((node) => { node.disabled = false; });
+      }
     }
 
     restoreActiveJob();
