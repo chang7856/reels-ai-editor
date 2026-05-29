@@ -64,13 +64,15 @@ The app needs `ffmpeg` to read your video. Install it once and you never have to
 
 Go to the [**Releases**](../../releases/latest) page and grab one of:
 
-| File | For |
-|---|---|
-| `ReelsAIEditor-macOS-arm64.dmg` | **Mac with M1/M2/M3/M4** (Apple Silicon, 2020+) |
-| `ReelsAIEditor-macOS-intel.dmg` | **Mac with Intel chip** (pre-2020) |
-| `ReelsAIEditor-Windows-x64.zip` | **Windows 10/11** |
+| File | For | Update status |
+|---|---|---|
+| `ReelsAIEditor-macOS-arm64.dmg` | **Mac with M1/M2/M3/M4** (Apple Silicon, 2020+) | **Actively maintained** |
+| `ReelsAIEditor-macOS-intel.dmg` | **Mac with Intel chip** (pre-2020) | Frozen at v1.0 — no future updates |
+| `ReelsAIEditor-Windows-x64.zip` | **Windows 10/11** | Frozen at v1.0 — no future updates |
 
 Not sure which Mac you have? Click 🍎 → "About This Mac" → look at "Chip". If it says "M-something", grab the **arm64** one.
+
+> **Only the Apple Silicon build gets future updates.** Intel Mac and Windows are published once at v1.0.0 (2026-05-30) as a one-shot snapshot — if you need newer features on those platforms, run from source (Path B) or fork + re-trigger CI yourself. Full details in [RELEASES.md](RELEASES.md).
 
 ### 3. Open the app
 
@@ -198,13 +200,15 @@ winget install ffmpeg
 
 到 [**Releases**](../../releases/latest) 頁面下載：
 
-| 檔案 | 適用 |
-|---|---|
-| `ReelsAIEditor-macOS-arm64.dmg` | **Mac 是 M1/M2/M3/M4** |
-| `ReelsAIEditor-macOS-intel.dmg` | **Mac 是 Intel 處理器**（2020 之前） |
-| `ReelsAIEditor-Windows-x64.zip` | **Windows 10/11** |
+| 檔案 | 適用 | 更新狀態 |
+|---|---|---|
+| `ReelsAIEditor-macOS-arm64.dmg` | **Mac 是 M1/M2/M3/M4** | **持續更新** |
+| `ReelsAIEditor-macOS-intel.dmg` | **Mac 是 Intel 處理器**（2020 之前） | 停在 v1.0 不再更新 |
+| `ReelsAIEditor-Windows-x64.zip` | **Windows 10/11** | 停在 v1.0 不再更新 |
 
 不知道你 Mac 是哪一種？點左上 🍎 → 「關於這台 Mac」→ 看「晶片」。寫 M 開頭就是 **arm64**。
+
+> **只有 Apple Silicon 版本會持續更新**。Intel Mac 跟 Windows 在 v1.0.0（2026-05-30）發布一次後就不會再更新；如果你需要新功能，請走「[路 B：從原始碼跑](#路-b從原始碼跑)」自己 build，或 fork 之後自己跑 CI。完整說明在 [RELEASES.md](RELEASES.md)。
 
 #### 3. 打開 App
 

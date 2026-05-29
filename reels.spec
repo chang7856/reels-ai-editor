@@ -39,7 +39,14 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
-    excludes=["matplotlib", "scipy", "pandas", "tkinter", "test", "unittest"],
+    excludes=[
+        "matplotlib", "scipy", "pandas", "tkinter", "test", "unittest",
+        "PyQt5", "PyQt6", "PySide2", "PySide6",  # GUI toolkits we don't use
+        "IPython", "jupyter_client", "jupyter_core", "notebook",
+        "sphinx", "pytest", "pip", "setuptools",  # dev tools
+        "PIL.ImageQt",  # pulls Qt
+        "torch", "tensorflow",  # heavy ML libs faster-whisper doesn't need
+    ],
     cipher=block_cipher,
     noarchive=False,
 )
