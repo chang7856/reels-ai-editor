@@ -285,7 +285,36 @@ def job_status(job_id):
 @app.get("/outputs/<job_id>/<path:filename>")
 def output_file(job_id, filename):
     cleanup_old_files()
-    return send_from_directory(OUTPUTS / job_id, filename, as_attachment=False)
+    job_dir = OUTPUTS / job_id
+    if not (job_dir / filename).exists():
+        return (
+            """
+            <!doctype html>
+            <html lang="zh-Hant">
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>檔案已清除</title>
+              <style>
+                body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f3f5f2; color: #15171c; }
+                main { width: min(560px, calc(100% - 32px)); padding: 28px; border: 1px solid #d9dee7; border-radius: 8px; background: white; box-shadow: 0 22px 70px rgba(20, 24, 31, .10); }
+                h1 { margin: 0 0 10px; font-size: 28px; }
+                p { color: #68707c; font-size: 16px; line-height: 1.55; }
+                a { display: inline-flex; margin-top: 10px; padding: 12px 15px; border-radius: 7px; background: #15171c; color: white; text-decoration: none; font-weight: 900; }
+              </style>
+            </head>
+            <body>
+              <main>
+                <h1>檔案已清除或不存在</h1>
+                <p>輸出的 Reels 影片與封面會在 3 小時後自動刪除。請回到主頁重新上傳影片產生新版本。</p>
+                <a href="/">回到 Reels AI Editor</a>
+              </main>
+            </body>
+            </html>
+            """,
+            404,
+        )
+    return send_from_directory(job_dir, filename, as_attachment=False)
 
 
 if __name__ == "__main__":
