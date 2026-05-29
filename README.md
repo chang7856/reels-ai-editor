@@ -29,17 +29,7 @@ If you have any of those, this is not the tool for you.
 
 ---
 
-## Choose your install path
-
-| Who are you? | Take this path |
-|---|---|
-| 🐭 I just want to use it, I don't code | **Path A — Download the .app** |
-| 🌐 I'll use the public link my friend shared | Just open the URL, that's it |
-| 🛠️ I'm a developer, I want to run from source | **Path B — Run from source** |
-
----
-
-## Path A — Download the .app (no coding needed)
+## How to install
 
 ### 1. Install ffmpeg (one-time, ~30 seconds)
 
@@ -72,7 +62,7 @@ Go to the [**Releases**](../../releases/latest) page and grab one of:
 
 Not sure which Mac you have? Click 🍎 → "About This Mac" → look at "Chip". If it says "M-something", grab the **arm64** one.
 
-> **Only the Apple Silicon build gets future updates.** Intel Mac and Windows are published once at v1.0.0 (2026-05-30) as a one-shot snapshot — if you need newer features on those platforms, run from source (Path B) or fork + re-trigger CI yourself. Full details in [RELEASES.md](RELEASES.md).
+> **Only the Apple Silicon build gets future updates.** Intel Mac and Windows are published once at v1.0.0 (2026-05-30) as a one-shot snapshot. Full details in [RELEASES.md](RELEASES.md).
 
 ### 3. Open the app
 
@@ -91,30 +81,12 @@ Your browser will open at `http://127.0.0.1:5057`. Pick a Cover Style, drag your
 
 ---
 
-## Path B — Run from source (developers)
-
-```bash
-git clone https://github.com/<you>/reels-ai-editor.git
-cd reels-ai-editor
-brew install ffmpeg                  # macOS  (Linux: sudo apt install ffmpeg)
-pip3 install -r requirements.txt
-python3 app.py
-```
-
-Open <http://127.0.0.1:5057> in your browser.
-
----
-
 ## Share the app with people who don't have it (free)
 
 You can expose your local server as a public URL using **Cloudflare Tunnel**. Anyone can use it without installing anything — they just open the link.
 
-```bash
-brew install cloudflared
-./share-tunnel.command
-```
+The app ships with a one-click sharing script. After you install `cloudflared` once (`brew install cloudflared`), double-click `share-tunnel.command` inside the app folder and it will:
 
-`share-tunnel.command` will:
 1. Start the Flask app
 2. Start a Cloudflare Tunnel
 3. Print + copy the public `https://xxxxx.trycloudflare.com` URL to your clipboard
@@ -173,14 +145,6 @@ If you're running the app on your own Mac, "the computer" is your Mac. If you're
 
 ### 怎麼安裝
 
-| 你是誰？ | 走哪條 |
-|---|---|
-| 🐭 我只想用，我不會寫程式 | **路 A：下載 .app** |
-| 🌐 朋友丟我一個網址讓我用 | 點網址，就這樣 |
-| 🛠️ 我會 Python，想看原始碼 | **路 B：從原始碼跑** |
-
-### 路 A：下載 .app
-
 #### 1. 先裝 ffmpeg（一次就好）
 
 **macOS：**
@@ -208,7 +172,7 @@ winget install ffmpeg
 
 不知道你 Mac 是哪一種？點左上 🍎 → 「關於這台 Mac」→ 看「晶片」。寫 M 開頭就是 **arm64**。
 
-> **只有 Apple Silicon 版本會持續更新**。Intel Mac 跟 Windows 在 v1.0.0（2026-05-30）發布一次後就不會再更新；如果你需要新功能，請走「[路 B：從原始碼跑](#路-b從原始碼跑)」自己 build，或 fork 之後自己跑 CI。完整說明在 [RELEASES.md](RELEASES.md)。
+> **只有 Apple Silicon 版本會持續更新**。Intel Mac 跟 Windows 在 v1.0.0（2026-05-30）發布一次後就不會再更新。完整說明在 [RELEASES.md](RELEASES.md)。
 
 #### 3. 打開 App
 
@@ -225,28 +189,12 @@ winget install ffmpeg
 
 瀏覽器會打開 `http://127.0.0.1:5057`。挑一個封面樣式 → 拖影片 → 按「**開始自動剪輯**」→ 等大概 1 分鐘 → 下載。
 
-### 路 B：從原始碼跑
-
-```bash
-git clone https://github.com/<你>/reels-ai-editor.git
-cd reels-ai-editor
-brew install ffmpeg                  # macOS
-pip3 install -r requirements.txt
-python3 app.py
-```
-
-打開瀏覽器到 <http://127.0.0.1:5057>。
-
 ### 把 App 分享給沒裝的人用（免費）
 
 用 **Cloudflare Tunnel** 把你電腦上的 app 變成一條公開網址，朋友直接點網址就能用，他不用裝任何東西。
 
-```bash
-brew install cloudflared
-./share-tunnel.command
-```
+App 資料夾裡附了一個一鍵分享 script。先裝一次 `cloudflared`（`brew install cloudflared`），然後雙擊 `share-tunnel.command`，它會：
 
-`share-tunnel.command` 會：
 1. 啟動 Flask
 2. 啟動 Cloudflare Tunnel
 3. 把公開網址（`https://xxxxx.trycloudflare.com`）印出來並複製到剪貼簿

@@ -1,8 +1,8 @@
 """PyInstaller entry point.
 
 A thin wrapper around ``app.py`` that auto-opens the user's default browser
-at ``http://127.0.0.1:5057`` a moment after Flask starts. The compiled .app /
-.exe is identical to running ``python3 app.py`` from source, just bundled.
+at ``http://127.0.0.1:5057`` a moment after Flask starts. This file is the
+entry the .app / .exe boots into.
 """
 import os
 import sys

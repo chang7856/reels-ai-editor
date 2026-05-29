@@ -12,14 +12,9 @@ First public release. Three platform binaries are attached to the GitHub Release
 
 ### Why only Apple Silicon gets updates
 
-The author runs an Apple Silicon Mac. Cross-platform builds (Intel Mac /
-Windows) only happen automatically when the CI workflow is intentionally
-re-triggered. We're publishing v1.0 for those two platforms as a one-shot
-courtesy snapshot. If you need newer features on Intel Mac or Windows, you'll
-need to either:
-
-1. Run from source (see `README.md` Path B), or
-2. Fork the repo and run the CI workflow yourself.
+The author runs an Apple Silicon Mac. Cross-platform builds for Intel Mac
+and Windows are published once at v1.0 as a one-shot courtesy snapshot.
+Future updates target Apple Silicon only.
 
 ### What's in v1.0.0
 
