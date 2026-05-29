@@ -31,26 +31,9 @@ If you have any of those, this is not the tool for you.
 
 ## How to install
 
-### 1. Install ffmpeg (one-time, ~30 seconds)
+No Terminal. No `brew install`. No setup. Just download and open.
 
-The app needs `ffmpeg` to read your video. Install it once and you never have to think about it again.
-
-**macOS:**
-1. Open Terminal (⌘+Space → type "terminal")
-2. Paste this and press Enter:
-   ```bash
-   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-   brew install ffmpeg
-   ```
-   (First line installs [Homebrew](https://brew.sh) if you don't have it; second line installs ffmpeg.)
-
-**Windows:**
-- Open PowerShell as administrator and run:
-  ```powershell
-  winget install ffmpeg
-  ```
-
-### 2. Download the right .app for your machine
+### 1. Download the right .app for your machine
 
 Go to the [**Releases**](../../releases/latest) page and grab one of:
 
@@ -64,7 +47,7 @@ Not sure which Mac you have? Click 🍎 → "About This Mac" → look at "Chip".
 
 > **Only the Apple Silicon build gets future updates.** Intel Mac and Windows are published once at v1.0.0 (2026-05-30) as a one-shot snapshot. Full details in [RELEASES.md](RELEASES.md).
 
-### 3. Open the app
+### 2. Open the app
 
 **Mac:** Double-click the `.dmg`, drag `ReelsAIEditor` to your Applications folder, then open it.
 
@@ -75,7 +58,7 @@ Not sure which Mac you have? Click 🍎 → "About This Mac" → look at "Chip".
 
 **Windows:** Unzip, double-click `ReelsAIEditor.exe`.
 
-### 4. Drop a video in
+### 3. Drop a video in
 
 Your browser will open at `http://127.0.0.1:5057`. Pick a Cover Style, drag your video, click **Start Auto Edit**. Wait ~1 minute. Download.
 
@@ -85,7 +68,7 @@ Your browser will open at `http://127.0.0.1:5057`. Pick a Cover Style, drag your
 
 You can expose your local server as a public URL using **Cloudflare Tunnel**. Anyone can use it without installing anything — they just open the link.
 
-The app ships with a one-click sharing script. After you install `cloudflared` once (`brew install cloudflared`), double-click `share-tunnel.command` inside the app folder and it will:
+This is the one bit that does need a Terminal step, and it's optional — only do this if you actually want to share. Install `cloudflared` once, then double-click `share-tunnel.command` from the unzipped repo and it will:
 
 1. Start the Flask app
 2. Start a Cloudflare Tunnel
@@ -94,7 +77,7 @@ The app ships with a one-click sharing script. After you install `cloudflared` o
 Send that URL to anyone. As long as your computer is awake, they can upload videos. Files still auto-delete after 15 minutes, so you don't accumulate footage on your machine.
 
 **Disk usage on your machine:**
-- Always-on: ~1.2 GB (Whisper model + ffmpeg + Python deps)
+- Always-on: ~1.3 GB (Whisper model + the .app itself, which has ffmpeg bundled)
 - Per active job: 100–500 MB temporary (deleted after 15 min)
 - 5 simultaneous users peak: ~3 GB
 
@@ -115,12 +98,12 @@ If you're running the app on your own Mac, "the computer" is your Mac. If you're
 
 | Symptom | Fix |
 |---|---|
-| App won't start, terminal says **"Missing: ffmpeg, ffprobe"** | Run `brew install ffmpeg` (macOS) / `winget install ffmpeg` (Win) |
 | Browser opens but page doesn't load | Port 5057 might be busy — quit other instances or restart your Mac |
 | "Cannot be opened because developer cannot be verified" | Right-click the app → Open (one-time bypass) |
 | Upload fails with "影片格式無法讀取" | Re-export your video to `.mp4` (most editors do this by default) |
 | Transcription is slow on Intel Mac | Yep, Apple Silicon is 3–5× faster on Whisper. Use the M-chip Mac if you have one |
 | Whisper downloads 400 MB on first run | Normal. Only happens once, model is cached |
+| App is corrupted / missing files on first run | Re-download the .dmg from the [Releases](../../releases/latest) page — the bundle ships with ffmpeg + ffprobe inside |
 
 ---
 
@@ -145,22 +128,9 @@ If you're running the app on your own Mac, "the computer" is your Mac. If you're
 
 ### 怎麼安裝
 
-#### 1. 先裝 ffmpeg（一次就好）
+不用開終端機。不用 `brew install`。不用設定。下載打開就能用。
 
-**macOS：**
-1. 打開「終端機」（⌘ + 空白鍵搜尋 "terminal"）
-2. 貼上這兩行：
-   ```bash
-   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-   brew install ffmpeg
-   ```
-
-**Windows：** 以系統管理員開 PowerShell：
-```powershell
-winget install ffmpeg
-```
-
-#### 2. 下載對應你 Mac/PC 的版本
+#### 1. 下載對應你 Mac/PC 的版本
 
 到 [**Releases**](../../releases/latest) 頁面下載：
 
@@ -174,7 +144,7 @@ winget install ffmpeg
 
 > **只有 Apple Silicon 版本會持續更新**。Intel Mac 跟 Windows 在 v1.0.0（2026-05-30）發布一次後就不會再更新。完整說明在 [RELEASES.md](RELEASES.md)。
 
-#### 3. 打開 App
+#### 2. 打開 App
 
 **Mac：** 雙擊 `.dmg`，把 `ReelsAIEditor` 拖到「應用程式」資料夾，然後打開它。
 
@@ -185,7 +155,7 @@ winget install ffmpeg
 
 **Windows：** 解壓縮，雙擊 `ReelsAIEditor.exe`。
 
-#### 4. 丟影片進去
+#### 3. 丟影片進去
 
 瀏覽器會打開 `http://127.0.0.1:5057`。挑一個封面樣式 → 拖影片 → 按「**開始自動剪輯**」→ 等大概 1 分鐘 → 下載。
 
@@ -193,7 +163,7 @@ winget install ffmpeg
 
 用 **Cloudflare Tunnel** 把你電腦上的 app 變成一條公開網址，朋友直接點網址就能用，他不用裝任何東西。
 
-App 資料夾裡附了一個一鍵分享 script。先裝一次 `cloudflared`（`brew install cloudflared`），然後雙擊 `share-tunnel.command`，它會：
+這一段是少數需要開終端機的步驟，而且**只有想分享給朋友**才需要做。先裝一次 `cloudflared`，然後從你下載的 repo 資料夾雙擊 `share-tunnel.command`，它會：
 
 1. 啟動 Flask
 2. 啟動 Cloudflare Tunnel
@@ -202,7 +172,7 @@ App 資料夾裡附了一個一鍵分享 script。先裝一次 `cloudflared`（`
 把那條網址貼給朋友。只要你電腦沒睡著他就能用。影片仍會 15 分鐘自動刪除，所以你電腦不會被別人塞滿。
 
 **電腦容量會用多少？**
-- 常駐：約 **1.2 GB**（Whisper model + Python 套件 + ffmpeg）
+- 常駐：約 **1.3 GB**（Whisper model + 已包含 ffmpeg 的 .app 本體）
 - 每支處理中影片：100–500 MB（15 分鐘後清掉）
 - 5 個人同時跑的尖峰：~3 GB
 
@@ -219,12 +189,12 @@ App 資料夾裡附了一個一鍵分享 script。先裝一次 `cloudflared`（`
 
 | 症狀 | 解法 |
 |---|---|
-| 開不起來，Terminal 跳「Missing: ffmpeg」 | `brew install ffmpeg`（Mac）/ `winget install ffmpeg`（Win） |
 | 瀏覽器有開但網頁打不開 | port 5057 被佔了，重開機或關掉其他程式 |
 | 「無法打開，開發者未驗證」 | 右鍵 App → 打開（一次性允許） |
 | 上傳跳「影片格式無法讀取」 | 重新匯出成 `.mp4`，大部分剪輯軟體預設都是這個 |
 | Intel Mac 轉錄超慢 | 對，Apple Silicon 跑 Whisper 快 3–5 倍。有 M 系列就用 M 系列 |
 | 第一次啟動下載了 400 MB | 正常，那是 Whisper model，下載一次就好 |
+| 開不起來，說檔案缺失 | App 包裝壞了，從 [Releases](../../releases/latest) 重新下載一份就好（ffmpeg + ffprobe 已經包在裡面，不用另外裝） |
 
 ---
 

@@ -12,7 +12,11 @@
 set -eo pipefail
 cd "$(dirname "$0")/.."
 
-ARCH=$(uname -m)
+# Build arch comes from the Python interpreter, NOT the shell. On Apple
+# Silicon you can run an Intel anaconda through Rosetta and uname will still
+# say "arm64", but the produced .app would be x86_64. So ask Python directly.
+PY="${PYTHON:-python3}"
+ARCH=$("$PY" -c "import platform; print(platform.machine())")
 if [ "$ARCH" = "arm64" ]; then
   SUFFIX="arm64"
 elif [ "$ARCH" = "x86_64" ]; then
@@ -22,13 +26,20 @@ else
   exit 1
 fi
 
-echo "Building Reels AI Editor for macOS ${SUFFIX}"
+echo "Building Reels AI Editor for macOS ${SUFFIX} (interpreter: $PY)"
 
-python3 -m pip install --upgrade pyinstaller
-python3 -m pip install -r requirements.txt
+# Stage ffmpeg + ffprobe under bin/ so PyInstaller bundles them into the .app.
+# This is the whole point of "drag and drop install" -- users never touch
+# Terminal. We pass TARGET_ARCH so cross-arch builds (Intel anaconda on an
+# Apple Silicon shell) get the correct ffmpeg flavor.
+rm -rf bin
+TARGET_ARCH="$ARCH" bash scripts/fetch_ffmpeg_macos.sh
+
+"${PYTHON:-python3}" -m pip install --upgrade pyinstaller
+"${PYTHON:-python3}" -m pip install -r requirements.txt
 
 rm -rf build dist
-python3 -m PyInstaller reels.spec --clean --noconfirm
+"${PYTHON:-python3}" -m PyInstaller reels.spec --clean --noconfirm
 
 APP="dist/ReelsAIEditor.app"
 if [ ! -d "$APP" ]; then

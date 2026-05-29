@@ -14,8 +14,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install ffmpeg (for the build, not bundled)
-        run: brew install ffmpeg create-dmg
+      - name: Install build helpers
+        # ffmpeg static binaries get fetched by the build script and bundled
+        # into the .app — we only need create-dmg here for packaging.
+        run: brew install create-dmg
       - name: Build
         run: bash scripts/build_macos.sh
       - uses: actions/upload-artifact@v4
@@ -30,8 +32,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install ffmpeg
-        run: brew install ffmpeg create-dmg
+      - name: Install build helpers
+        run: brew install create-dmg
       - name: Build
         run: bash scripts/build_macos.sh
       - uses: actions/upload-artifact@v4
@@ -84,7 +86,7 @@ jobs:
 
             ## First-launch notes
             - **macOS:** right-click the app and choose "Open" the first time (developer not Apple-notarised).
-            - **All platforms:** install `ffmpeg` separately — `brew install ffmpeg` (macOS) or `winget install ffmpeg` (Windows).
+            - **ffmpeg is bundled inside the app — you do not need to install anything else.**
             - First run downloads the Whisper `small` model (~470 MB) into your user cache.
 
             Full release notes: see [RELEASES.md](RELEASES.md) in the repo.

@@ -34,8 +34,9 @@ Future updates target Apple Silicon only.
 - macOS will show "developer cannot be verified" on first launch — right-click
   the .app and choose "Open" to bypass once.
 - First run downloads the Whisper `small` model (~470 MB).
-- ffmpeg must be installed separately (`brew install ffmpeg` /
-  `winget install ffmpeg`); the .app does not bundle it.
+- `ffmpeg` and `ffprobe` are bundled inside the .app — no separate install
+  required. (This was a fix released the same day after the original v1.0
+  shipped without them and required `brew install ffmpeg`.)
 - Intel Mac builds run noticeably slower than Apple Silicon for transcription
   (3–5×).
 

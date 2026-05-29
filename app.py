@@ -25,9 +25,25 @@ OUTPUTS.mkdir(exist_ok=True)
 
 def _preflight_check():
     """Catch the two most common "why won't it start" problems and explain
-    them in plain language before Flask even boots."""
+    them in plain language before Flask even boots.
+
+    The packaged .app / .exe ships ffmpeg + ffprobe under bin/ and launch.py
+    prepends that dir to PATH, so this branch only fires when someone is
+    running from source without ffmpeg installed system-wide.
+    """
     missing = [tool for tool in ("ffmpeg", "ffprobe") if shutil.which(tool) is None]
     if missing:
+        if getattr(sys, "frozen", False):
+            # Inside the .app bin/ should have shipped both binaries. If we
+            # got here something's wrong with the bundle itself.
+            sys.stderr.write(
+                "\n"
+                "Reels AI Editor failed to start.\n\n"
+                f"  Missing bundled binaries: {', '.join(missing)}\n"
+                "  The .app appears to be corrupted. Re-download it from:\n"
+                "  https://github.com/chang7856/reels-ai-editor/releases/latest\n\n"
+            )
+            sys.exit(1)
         installer = {
             "Darwin": "brew install ffmpeg",
             "Linux": "sudo apt install ffmpeg   # or your distro's equivalent",
@@ -40,9 +56,10 @@ def _preflight_check():
             "╰───────────────────────────────────────────────────────────────╯\n"
             f"  Missing: {', '.join(missing)}\n\n"
             "  This app uses ffmpeg to read the video and rebuild it after\n"
-            "  the auto-edit. Install it with:\n\n"
+            "  the auto-edit. If you are running from source, install it with:\n\n"
             f"      {installer}\n\n"
-            "  Then re-open this window (or double-click start.command).\n\n"
+            "  (Users who downloaded the .app from Releases don't need this —\n"
+            "   ffmpeg is bundled inside the app.)\n\n"
         )
         sys.exit(1)
 

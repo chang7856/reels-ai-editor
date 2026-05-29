@@ -29,7 +29,17 @@ def main() -> None:
     # `_MEIPASS` extraction dir. Move into it so relative paths (templates/,
     # reels_memory.json) resolve.
     if getattr(sys, "frozen", False):
-        os.chdir(Path(sys._MEIPASS))  # type: ignore[attr-defined]
+        bundle_dir = Path(sys._MEIPASS)  # type: ignore[attr-defined]
+        os.chdir(bundle_dir)
+
+        # The .app ships its own ffmpeg + ffprobe under bin/ so users never
+        # have to install anything from Terminal. Put that dir first on PATH
+        # so subprocess.run("ffmpeg", ...) inside the pipeline finds them.
+        bin_dir = bundle_dir / "bin"
+        if bin_dir.exists():
+            os.environ["PATH"] = (
+                f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"
+            )
 
     threading.Thread(
         target=_open_browser_when_ready,

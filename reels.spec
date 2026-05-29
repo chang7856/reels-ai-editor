@@ -20,6 +20,15 @@ datas = [
     (str(ROOT / "reels_gui_pipeline.py"), "."),
 ]
 
+# Bundle ffmpeg + ffprobe so users never have to open Terminal to install
+# anything. scripts/fetch_ffmpeg_*.{sh,bat} populates bin/ before build.
+# On macOS the binary is plain "ffmpeg"; on Windows it's "ffmpeg.exe".
+BIN = ROOT / "bin"
+if BIN.is_dir():
+    for entry in BIN.iterdir():
+        if entry.is_file():
+            datas.append((str(entry), "bin"))
+
 # Faster-whisper bundles its own libs + tokenizer files
 datas += collect_data_files("faster_whisper")
 datas += collect_data_files("opencc", subdir="dictionary")

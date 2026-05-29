@@ -5,6 +5,14 @@ REM Output: dist\ReelsAIEditor\  →  zip it as ReelsAIEditor-Windows-x64.zip
 setlocal
 pushd %~dp0\..
 
+echo Staging bundled ffmpeg + ffprobe...
+call scripts\fetch_ffmpeg_windows.bat
+if errorlevel 1 (
+  echo Failed to fetch ffmpeg
+  popd
+  exit /b 1
+)
+
 echo Installing build dependencies...
 python -m pip install --upgrade pyinstaller
 python -m pip install -r requirements.txt

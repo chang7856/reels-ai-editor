@@ -15,6 +15,11 @@ build/
 dist/
 *.spec.bak
 
+# Downloaded ffmpeg static binaries that get bundled into the .app at build
+# time (fetched by scripts/fetch_ffmpeg_*.{sh,bat}). Never commit these —
+# they're ~70 MB each and platform-specific.
+bin/
+
 # ─── macOS noise ─────────────────────────────────────────────────────────
 .DS_Store
 .AppleDouble
