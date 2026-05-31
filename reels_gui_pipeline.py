@@ -1,5 +1,6 @@
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -102,41 +103,213 @@ def parse_silences(log_path):
     return list(zip(starts, ends))
 
 
+def _can_use_mlx():
+    """Return True iff we're on Apple Silicon arm64 macOS AND mlx-whisper +
+    Metal are usable. Anywhere else we fall back to faster-whisper CPU.
+
+    mlx-whisper transcribes 20-60x realtime by running the encoder on the
+    GPU (Metal) and the decoder on the ANE. faster-whisper CPU int8 is only
+    ~2-4x realtime even with the turbo model -- nowhere near the 3min->1min
+    budget. So this branch is the whole speed story on Apple Silicon.
+    """
+    if platform.system() != "Darwin":
+        return False
+    if platform.machine() != "arm64":
+        return False
+    try:
+        import mlx_whisper  # noqa: F401
+        import mlx.core as mx
+        return bool(mx.metal.is_available())
+    except Exception:
+        return False
+
+
 def load_whisper(memory, job_dir=None):
+    """Return a backend handle. Two shapes:
+        ("mlx",  {"repo": "mlx-community/whisper-large-v3-turbo"})
+        ("ctr",  WhisperModel(...))   # faster-whisper / ctranslate2
+    The transcribe() function dispatches on the leading tag.
+    """
     perf = memory.get("performance", {})
-    model_name = perf.get("whisper_model", "small")
+    if _can_use_mlx():
+        repo = perf.get("mlx_whisper_repo", "mlx-community/whisper-large-v3-turbo")
+        if job_dir:
+            write_progress(job_dir, "transcribe", f"正在載入 Whisper {repo.split('/')[-1]} (MLX)")
+        log(f"Loading Whisper (MLX backend): {repo}")
+        return ("mlx", {"repo": repo})
+
+    # Fallback: faster-whisper CPU (Intel macOS / Windows / Linux)
+    model_name = perf.get("whisper_model", "Systran/faster-whisper-large-v3-turbo")
     compute_type = perf.get("compute_type", "int8")
     cpu_threads = int(perf.get("cpu_threads", 4))
     if job_dir:
-        write_progress(job_dir, "transcribe", f"正在載入 Whisper {model_name} fast mode")
-    log(f"Loading Whisper model: {model_name} ({compute_type}, {cpu_threads} threads)")
-    return WhisperModel(
+        write_progress(job_dir, "transcribe", f"正在載入 Whisper {model_name}")
+    log(f"Loading Whisper (faster-whisper CPU): {model_name} ({compute_type}, {cpu_threads} threads)")
+    return ("ctr", WhisperModel(
         model_name,
         device="cpu",
         compute_type=compute_type,
         cpu_threads=cpu_threads,
         num_workers=1,
+    ))
+
+
+def load_translator(memory, job_dir=None):
+    """Load the bundled CT2-converted opus-mt-zh-en model plus its
+    SentencePiece tokenizers.
+
+    The model is staged into models/opus-mt-zh-en/ at build time by
+    scripts/fetch_translator.sh (which runs ct2-transformers-converter
+    against Helsinki-NLP/opus-mt-zh-en with int8 quantisation). At runtime
+    we only need ctranslate2 (already a dep via faster-whisper) and
+    sentencepiece (~3 MB).
+
+    Returns (translator, sp_src, sp_tgt) on success, or None if the bundle
+    isn't present. Callers fall back to an empty EN list when None.
+    """
+    model_dir = ROOT / "models" / "opus-mt-zh-en"
+    if not model_dir.is_dir() or not (model_dir / "model.bin").exists():
+        log(f"  WARNING: translator model not found at {model_dir}")
+        log("  EN subtitles will be empty. Run scripts/fetch_translator.sh.")
+        return None
+    if job_dir:
+        write_progress(job_dir, "transcribe", "正在載入翻譯模型")
+    log(f"Loading ZH->EN translator from {model_dir}")
+    try:
+        import ctranslate2
+        import sentencepiece as spm
+    except ImportError as exc:
+        log(f"  WARNING: translator runtime deps missing: {exc}")
+        return None
+    perf = memory.get("performance", {})
+    threads = int(perf.get("cpu_threads", 4))
+    translator = ctranslate2.Translator(
+        str(model_dir),
+        device="cpu",
+        compute_type="int8",
+        intra_threads=threads,
+    )
+    sp_src = spm.SentencePieceProcessor()
+    sp_src.Load(str(model_dir / "source.spm"))
+    sp_tgt = spm.SentencePieceProcessor()
+    sp_tgt.Load(str(model_dir / "target.spm"))
+    return (translator, sp_src, sp_tgt)
+
+
+def translate_zh_to_en(translator_bundle, zh_segments, out_json, job_dir=None):
+    """Translate every ZH segment to EN using Marian opus-mt-zh-en (via
+    ctranslate2). Returns rows aligned 1:1 with zh_segments using the same
+    {"start", "end", "text"} shape downstream code expects, so the existing
+    `_build_en_assignments` proportional-split helper still works (it
+    becomes a no-op for 1:1 segments, which is exactly what we want).
+
+    Marian per-segment translation is ~50-100x faster than Whisper's
+    translate task at this content scale, and the alignment is automatic
+    because each EN inherits its source ZH's timestamps.
+    """
+    if not zh_segments or translator_bundle is None:
+        if out_json:
+            out_json.write_text(
+                json.dumps({"language": "en", "task": "translate-marian", "segments": []}, ensure_ascii=False, indent=2)
+            )
+        return []
+    if job_dir:
+        write_progress(job_dir, "transcribe", "正在翻譯英文字幕")
+    log(f"3b/7 ZH -> EN translation ({len(zh_segments)} segments via Marian)")
+    translator, sp_src, sp_tgt = translator_bundle
+
+    src_texts = [seg["text"].strip() for seg in zh_segments]
+    src_tokens = [sp_src.EncodeAsPieces(text) if text else [] for text in src_texts]
+
+    results = translator.translate_batch(
+        src_tokens,
+        beam_size=1,
+        max_decoding_length=256,
+        replace_unknowns=True,
     )
 
+    rows = []
+    for zh, result in zip(zh_segments, results):
+        if result.hypotheses:
+            text = sp_tgt.DecodePieces(result.hypotheses[0]).strip()
+        else:
+            text = ""
+        rows.append({"start": zh["start"], "end": zh["end"], "text": text})
 
-def transcribe(model, memory, wav, out_json, task="transcribe", job_dir=None):
+    if out_json:
+        out_json.write_text(
+            json.dumps({"language": "en", "task": "translate-marian", "segments": rows}, ensure_ascii=False, indent=2)
+        )
+    return rows
+
+
+def transcribe(model_handle, memory, wav, out_json, task="transcribe", job_dir=None):
+    """Transcribe (or translate) `wav` using whichever Whisper backend was
+    selected by load_whisper(). Returns the same {"start", "end", "text"}
+    rows regardless of backend so downstream code is uniform.
+
+    We DO NOT call this with task="translate" anymore -- ZH->EN now goes
+    through Marian (translate_zh_to_en). This kwarg is kept for API
+    compatibility / unusual call sites.
+    """
     label = "Chinese transcription" if task == "transcribe" else "English translation"
     if job_dir:
         detail = "正在產生繁體中文字幕" if task == "transcribe" else "正在翻譯英文字幕"
         write_progress(job_dir, "transcribe", detail)
-    log(f"3/7 Running {label}")
     perf = memory.get("performance", {})
-    # For the Chinese pass we ask Whisper for per-word timestamps. That lets us
-    # snap each subtitle event to the actual speech onset/offset (instead of the
-    # looser VAD-segment boundary) so the burnt-in subtitle stays glued to the
-    # voice. The translation pass keeps the cheaper segment-level output.
     want_words = task == "transcribe" and perf.get("word_timestamps", True)
+
+    backend, payload = model_handle
+    if backend == "mlx":
+        return _transcribe_mlx(payload, wav, out_json, task, want_words, label)
+    return _transcribe_ctranslate2(payload, perf, wav, out_json, task, want_words, label)
+
+
+def _transcribe_mlx(payload, wav, out_json, task, want_words, label):
+    """MLX backend: Apple Neural Engine + Metal GPU. ~20-60x realtime on
+    Apple Silicon -- the whole reason we hit a 1-minute budget on 3-min
+    clips. Returns rows in our internal {start,end,text} shape.
+    """
+    log(f"3/7 Running {label} via mlx-whisper")
+    import mlx_whisper
+    result = mlx_whisper.transcribe(
+        str(wav),
+        path_or_hf_repo=payload["repo"],
+        language="zh" if task == "transcribe" else "en",
+        task=task,
+        word_timestamps=bool(want_words),
+        # mlx-whisper exposes the same VAD/condition options as openai-whisper:
+        condition_on_previous_text=False,
+        temperature=0.0,  # greedy -- no temperature fallback chain (faster)
+    )
+    rows = []
+    for seg in result.get("segments", []):
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        start = float(seg.get("start", 0.0))
+        end = float(seg.get("end", start))
+        if want_words and seg.get("words"):
+            real_words = [w for w in seg["words"] if (w.get("word") or "").strip()]
+            if real_words:
+                start = float(real_words[0]["start"])
+                end = float(real_words[-1]["end"])
+        rows.append({"start": start, "end": end, "text": text})
+    out_json.write_text(json.dumps({"language": result.get("language", "zh"), "task": task, "backend": "mlx", "segments": rows}, ensure_ascii=False, indent=2))
+    return rows
+
+
+def _transcribe_ctranslate2(model, perf, wav, out_json, task, want_words, label):
+    """Fallback path: faster-whisper / CTranslate2 on CPU. Used on Intel
+    macOS, Windows, Linux. Slower than MLX but works everywhere.
+    """
+    log(f"3/7 Running {label} via faster-whisper (CPU)")
     segments, info = model.transcribe(
         str(wav),
         language="zh",
         task=task,
         vad_filter=True,
-        beam_size=int(perf.get("beam_size", 3 if task == "transcribe" else 1)),
+        beam_size=int(perf.get("beam_size", 1)),
         best_of=1,
         word_timestamps=bool(want_words),
         condition_on_previous_text=False,
@@ -153,7 +326,7 @@ def transcribe(model, memory, wav, out_json, task="transcribe", job_dir=None):
                 start = real_words[0].start
                 end = real_words[-1].end
         rows.append({"start": start, "end": end, "text": text})
-    out_json.write_text(json.dumps({"language": info.language, "task": task, "segments": rows}, ensure_ascii=False, indent=2))
+    out_json.write_text(json.dumps({"language": info.language, "task": task, "backend": "ctranslate2", "segments": rows}, ensure_ascii=False, indent=2))
     return rows
 
 
@@ -749,30 +922,75 @@ def _in_video_title_overlay(style):
     return _video_title_spec(style)
 
 
+def _select_video_encoder(export):
+    """Pick the fastest encoder available for this OS.
+
+    Apple Silicon and Intel macOS both have h264_videotoolbox (hardware
+    H.264 via the dedicated media engine + GPU). On Apple Silicon it's
+    ~4x faster than libx264 medium with effectively identical perceptual
+    quality at the bitrate we target. On Windows/Linux we fall back to
+    libx264 with the `veryfast` preset, which is ~3x faster than `medium`
+    and only loses ~5% efficiency for content this short.
+
+    Override via reels_memory.json `export.encoder` if needed:
+      "libx264", "h264_videotoolbox", "h264_nvenc", "h264_qsv"
+    """
+    forced = export.get("encoder")
+    if forced:
+        return forced
+    if platform.system() == "Darwin":
+        return "h264_videotoolbox"
+    return "libx264"
+
+
 def render_video(video, filter_path, output, memory):
     write_progress(output.parent, "render", "正在輸出壓縮後的 IG Reels 影片")
     log("5/7 Rendering compressed IG Reels MP4")
     export = memory["export"]
-    preset = export.get("x264_preset", "medium")
+    encoder = _select_video_encoder(export)
     crf = str(int(export.get("crf", 22)))
-    # NOTE: we encode in CRF mode rather than CBR/VBV. The previous CBR config
-    # (`-b:v ... -maxrate ... -bufsize ...`) starved the encoder on the very
-    # short first trim+concat piece (<1s) and produced a flat grey first
-    # ~30 frames. CRF gives consistent per-frame quality and keeps frame 0
-    # painted from the start, which matters more than hitting an exact bitrate.
+    log(f"  encoder: {encoder}")
+
     cmd = [
         "ffmpeg", "-hide_banner", "-y",
         "-i", str(video),
         "-filter_complex_script", str(filter_path),
         "-map", "[vout]",
         "-map", "[aout]",
-        "-c:v", "libx264",
-        "-preset", preset,
-        "-profile:v", "high",
-        "-level", "4.1",
-        "-crf", crf,
-        "-maxrate", export.get("maxrate", "4000k"),
-        "-bufsize", export.get("bufsize", "8000k"),
+        "-c:v", encoder,
+    ]
+
+    if encoder == "h264_videotoolbox":
+        # VideoToolbox doesn't accept libx264's -crf / -preset / -profile/level
+        # flags. We hand it -q:v (constant-quality VBR, 0=worst..100=best)
+        # which is the VT equivalent. q=60 maps roughly to libx264 CRF 22 at
+        # 720x1280 talking-head content. -allow_sw 1 lets it transparently
+        # fall back to software encoding if the HW encoder is busy or refuses
+        # the input (e.g. unusual color spaces). No -maxrate/-bufsize on
+        # purpose; the same sub-1s first-concat-piece problem applies and CBR
+        # would re-introduce the grey first frames.
+        cmd += [
+            "-q:v", str(export.get("videotoolbox_quality", 60)),
+            "-allow_sw", "1",
+            "-realtime", "0",
+        ]
+    else:
+        # NOTE: we encode in CRF mode rather than CBR/VBV. The previous CBR
+        # config (`-b:v ... -maxrate ... -bufsize ...`) starved the encoder
+        # on the very short first trim+concat piece (<1s) and produced a flat
+        # grey first ~30 frames. CRF gives consistent per-frame quality and
+        # keeps frame 0 painted from the start.
+        # `veryfast` here -- not `medium` -- because the savings are huge and
+        # the quality drop is invisible at this resolution/duration.
+        preset = export.get("x264_preset", "veryfast")
+        cmd += [
+            "-preset", preset,
+            "-profile:v", "high",
+            "-level", "4.1",
+            "-crf", crf,
+        ]
+
+    cmd += [
         "-pix_fmt", export["pix_fmt"],
         "-c:a", "aac",
         "-b:a", export["audio_bitrate"],
@@ -1211,7 +1429,16 @@ def process_video(source, job_dir, options_path=None):
     detect_silence(input_video, silence_log, memory, job_dir)
     model = load_whisper(memory, job_dir)
     zh_segments = transcribe(model, memory, wav, zh_json, "transcribe", job_dir)
-    en_segments = transcribe(model, memory, wav, en_json, "translate", job_dir) if memory["subtitle"]["bilingual"] else []
+    # We DO NOT run Whisper a second time for the EN pass. Instead we feed
+    # each ZH segment through a dedicated CT2-quantised Marian opus-mt-zh-en
+    # model -- ~50-100x faster than Whisper translate and gives 1:1 timing
+    # alignment for free. The translator is bundled into the .app at build
+    # time; first call into load_translator() is the only setup needed.
+    if memory["subtitle"]["bilingual"]:
+        translator_bundle = load_translator(memory, job_dir)
+        en_segments = translate_zh_to_en(translator_bundle, zh_segments, en_json, job_dir)
+    else:
+        en_segments = []
     write_progress(job_dir, "render", "正在 digest 內容，挑選 hook 與封面文案")
     cover_copy, hook_segment = build_cover_copy(memory, zh_segments, en_segments)
     log("4/7 Building edit timeline and subtitles")

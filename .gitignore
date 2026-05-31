@@ -20,6 +20,13 @@ dist/
 # they're ~70 MB each and platform-specific.
 bin/
 
+# Converted opus-mt-zh-en CTranslate2 model staged by scripts/fetch_translator.sh
+# (~80 MB). Re-generated at build time, never committed.
+models/
+
+# Build-time arm64 venv (created by us, not by users).
+.venv-arm64/
+
 # ─── macOS noise ─────────────────────────────────────────────────────────
 .DS_Store
 .AppleDouble

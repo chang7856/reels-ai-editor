@@ -5,3 +5,12 @@ flask>=3.0,<4
 faster-whisper>=1.0,<2
 opencc-python-reimplemented>=0.1.7
 pillow>=10,<12
+# SentencePiece is the tokenizer for the Marian opus-mt-zh-en translator.
+# The translator weights are converted to CTranslate2 format at build time
+# (scripts/fetch_translator.sh) so ctranslate2 itself is reused from
+# faster-whisper -- no extra runtime ML framework needed.
+sentencepiece>=0.1.99
+# mlx-whisper is the Apple Silicon transcription backend (Metal GPU + ANE,
+# ~20-60x realtime on M2/M3). Installed only on macOS arm64; the pipeline
+# auto-falls-back to faster-whisper on Intel / Windows / Linux.
+mlx-whisper>=0.4; sys_platform == "darwin" and platform_machine == "arm64"

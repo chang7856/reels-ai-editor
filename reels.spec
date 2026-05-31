@@ -29,6 +29,15 @@ if BIN.is_dir():
         if entry.is_file():
             datas.append((str(entry), "bin"))
 
+# Bundle the CT2-quantised opus-mt-zh-en translator (~80 MB) so EN subs
+# work fully offline with no first-run download. Populated by
+# scripts/fetch_translator.sh before build.
+TRANSLATOR = ROOT / "models" / "opus-mt-zh-en"
+if TRANSLATOR.is_dir():
+    for entry in TRANSLATOR.iterdir():
+        if entry.is_file():
+            datas.append((str(entry), "models/opus-mt-zh-en"))
+
 # Faster-whisper bundles its own libs + tokenizer files
 datas += collect_data_files("faster_whisper")
 datas += collect_data_files("opencc", subdir="dictionary")
@@ -37,13 +46,34 @@ datas += collect_data_files("ctranslate2")
 hiddenimports = (
     collect_submodules("faster_whisper")
     + collect_submodules("opencc")
-    + ["PIL.Image", "PIL.ImageDraw", "PIL.ImageFont", "PIL.ImageEnhance", "PIL.ImageFilter", "PIL.ImageStat"]
+    + collect_submodules("sentencepiece")
+    + ["PIL.Image", "PIL.ImageDraw", "PIL.ImageFont", "PIL.ImageEnhance", "PIL.ImageFilter", "PIL.ImageStat",
+       "ctranslate2", "sentencepiece"]
 )
+
+# mlx-whisper is the Apple Silicon transcription backend (Metal + ANE,
+# 20-60x realtime). It only exists on macOS arm64; PyInstaller silently
+# no-ops these on other platforms.
+mlx_binaries = []
+if sys.platform == "darwin":
+    try:
+        hiddenimports += collect_submodules("mlx_whisper")
+        hiddenimports += collect_submodules("mlx")
+        datas += collect_data_files("mlx_whisper")
+        datas += collect_data_files("mlx")  # picks up mlx.metallib
+        import mlx as _mlx_pkg
+        _mlx_lib_dir = Path(_mlx_pkg.__file__).parent / "lib"
+        if _mlx_lib_dir.is_dir():
+            for entry in _mlx_lib_dir.iterdir():
+                if entry.suffix in (".dylib", ".so", ".metallib"):
+                    mlx_binaries.append((str(entry), "mlx/lib"))
+    except Exception:
+        pass
 
 a = Analysis(
     ["launch.py"],
     pathex=[str(ROOT)],
-    binaries=[],
+    binaries=mlx_binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],

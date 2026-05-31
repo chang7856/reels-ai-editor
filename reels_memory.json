@@ -36,13 +36,14 @@
     "opening_trim_reason": "Skip autofocus pulls and lens warm-up frames (typically up to ~1.5–2s on iPhone selfies) so the first second of the Reel is crisp."
   },
   "performance": {
-    "mode": "balanced",
-    "whisper_model": "small",
+    "mode": "mlx",
+    "mlx_whisper_repo": "mlx-community/whisper-large-v3-turbo",
+    "whisper_model": "Systran/faster-whisper-large-v3-turbo",
     "compute_type": "int8",
-    "beam_size": 3,
+    "beam_size": 1,
     "cpu_threads": 4,
     "word_timestamps": true,
-    "note": "Balanced mode: small model with beam=3 and word-level timestamps. Word timestamps let us snap each subtitle event to the actual speech onset so subtitles sit on top of the voice instead of drifting."
+    "note": "On Apple Silicon arm64 we use mlx-whisper (Metal GPU + ANE, ~20-60x realtime on M2/M3). Whisper model downloads from mlx-community/whisper-large-v3-turbo on first run (~1.5 GB, cached in ~/.cache/huggingface). Intel/Windows fall back to Systran/faster-whisper-large-v3-turbo (~4x realtime). EN subs come from a dedicated Marian ZH->EN translator (CT2 int8, bundled in .app), not a second Whisper pass."
   },
   "export": {
     "format": "IG Reels",

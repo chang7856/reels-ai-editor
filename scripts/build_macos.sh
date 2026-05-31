@@ -35,11 +35,16 @@ echo "Building Reels AI Editor for macOS ${SUFFIX} (interpreter: $PY)"
 rm -rf bin
 TARGET_ARCH="$ARCH" bash scripts/fetch_ffmpeg_macos.sh
 
-"${PYTHON:-python3}" -m pip install --upgrade pyinstaller
-"${PYTHON:-python3}" -m pip install -r requirements.txt
+# Stage the CT2-quantised opus-mt-zh-en translator. ~80 MB once converted.
+# This is the big win that lets us skip a second Whisper pass for the EN
+# subtitles (used to take ~75s on a 3-min clip).
+PYTHON="$PY" bash scripts/fetch_translator.sh
+
+"$PY" -m pip install --upgrade pyinstaller
+"$PY" -m pip install -r requirements.txt
 
 rm -rf build dist
-"${PYTHON:-python3}" -m PyInstaller reels.spec --clean --noconfirm
+"$PY" -m PyInstaller reels.spec --clean --noconfirm
 
 APP="dist/ReelsAIEditor.app"
 if [ ! -d "$APP" ]; then
