@@ -95,9 +95,10 @@ Date last passed end-to-end: _(none)_
 
 ## Smoke-test command
 
+From the repo root:
+
 ```bash
-cd /Users/taofangchang/Documents/Codex/2026-05-24/https-www-instagram-com-realskytan-1 && \
-  PYTHON=$(pwd)/.venv-arm64/bin/python bash scripts/smoke_test.sh
+PYTHON="$(pwd)/.venv-arm64/bin/python" bash scripts/smoke_test.sh
 ```
 
 (See `scripts/smoke_test.sh` — runs synthetic clip through pipeline +
