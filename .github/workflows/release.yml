@@ -67,26 +67,15 @@ jobs:
         with:
           path: dist
       - name: Create GitHub Release
+        # Replace asset files on the existing tag but DO NOT touch the
+        # release body or name. We curate the Chinese install guide by hand
+        # via `gh release edit` and don't want CI to overwrite it. Omitting
+        # `body:` / `body_path:` / `generate_release_notes:` keeps the
+        # existing release notes untouched per softprops/action-gh-release
+        # v2 default behavior.
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/**/*.dmg
             dist/**/*.zip
-          generate_release_notes: true
-          body: |
-            **Release date:** $(date +%Y-%m-%d)
-
-            | Download | Platform | Update status |
-            |---|---|---|
-            | `ReelsAIEditor-macOS-arm64.dmg` | macOS · Apple Silicon (M1/M2/M3/M4) | **Actively maintained** |
-            | `ReelsAIEditor-macOS-intel.dmg` | macOS · Intel CPU (pre-2020 Mac) | Frozen at v1.0 — will not be updated again |
-            | `ReelsAIEditor-Windows-x64.zip` | Windows 10 / 11 | Frozen at v1.0 — will not be updated again |
-
-            **Only the Apple Silicon build receives future updates.** Intel Mac + Windows ship once at v1.0 as a one-shot snapshot.
-
-            ## First-launch notes
-            - **macOS:** right-click the app and choose "Open" the first time (developer not Apple-notarised).
-            - **ffmpeg is bundled inside the app — you do not need to install anything else.**
-            - First run downloads the Whisper `small` model (~470 MB) into your user cache.
-
-            Full release notes: see [RELEASES.md](RELEASES.md) in the repo.
+          fail_on_unmatched_files: true
