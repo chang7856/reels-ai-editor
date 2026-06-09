@@ -686,6 +686,119 @@
       background: #000;
       display: block;
     }
+    /* ── Cover-text editor ──────────────────────────────────────────────
+       Lives between the cover preview and the candidate strip. <details> +
+       <summary> so it starts collapsed and doesn't push the cover off-
+       screen on first paint; the user opens it only when they want to
+       rewrite the headline.
+    */
+    .cover-editor {
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .cover-editor > details > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .cover-editor > details > summary::after {
+      content: "▾";
+      margin-left: auto;
+      color: var(--muted);
+      transition: transform .15s ease;
+    }
+    .cover-editor > details[open] > summary::after { transform: rotate(180deg); }
+    .cover-editor > details > summary::-webkit-details-marker { display: none; }
+    .cover-editor-body {
+      padding: 0 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .cover-editor-body .hint {
+      margin: 0;
+      font-size: 13px;
+    }
+    .cover-editor-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 14px;
+    }
+    @media (max-width: 640px) {
+      .cover-editor-grid { grid-template-columns: 1fr; }
+    }
+    .cover-editor-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .cover-editor-field.full {
+      grid-column: 1 / -1;
+    }
+    .cover-editor-field label {
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .cover-editor-field input {
+      font: inherit;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: #fafafa;
+      transition: border-color .12s ease, background .12s ease, box-shadow .12s ease;
+      min-width: 0;
+    }
+    .cover-editor-field input:focus {
+      outline: none;
+      background: #fff;
+      border-color: #15171c;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+    }
+    .cover-editor-field input.dirty {
+      background: #fef3c7;
+      border-color: #f59e0b;
+    }
+    .cover-editor-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+    .cover-editor-actions .secondary {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      font-weight: 900;
+      padding: 9px 16px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .cover-editor-actions .secondary:hover:not(:disabled) {
+      border-color: #15171c;
+    }
+    .cover-editor-actions .secondary:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+    .cover-editor-status {
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--teal);
+      min-height: 18px;
+    }
+    .cover-editor-status.bad { color: var(--bad); }
     .transcript-verify {
       padding: 14px;
       border: 1px solid var(--line);
@@ -1188,6 +1301,24 @@
         coverUpdating: "正在更新封面…",
         coverUpdated: "封面已更新",
         coverUpdateFailed: "封面更新失敗，請再試一次",
+        coverEditorTitle: "✏️ 編輯封面文字",
+        coverEditorHelp: "上面、下面、英文副標都可以直接改。改完按「套用文案」會立刻重新生成封面（不會重新編碼影片，約 1 秒）。",
+        coverEditorPov: "上方標籤（如 POV）",
+        coverEditorMain1: "主標題第 1 行",
+        coverEditorMain2: "主標題第 2 行",
+        coverEditorEnglish: "主標題下方英文小字",
+        coverEditorBottom1: "下方標題第 1 行",
+        coverEditorBottom2: "下方標題第 2 行",
+        coverEditorEnMain1: "Main headline line 1",
+        coverEditorEnMain2: "Main headline line 2",
+        coverEditorEnBottom1: "Bottom line 1",
+        coverEditorEnBottom2: "Bottom line 2",
+        coverEditorApply: "套用文案",
+        coverEditorReset: "還原為原本的文字",
+        coverEditorApplying: "正在重新生成封面…",
+        coverEditorApplied: "封面文字已套用",
+        coverEditorReverted: "已還原為剛產生時的文字",
+        coverEditorTooLong: "單行最多 60 個字元",
         outputVideoTitle: "輸出影片",
         verifyTitle: "字幕對照（可直接編輯）",
         verifyHelp: "左邊時間可跳到影片那一刻。中文 / 英文格子可以直接點下去修改；改完按下方「套用字幕修改」會重新燒進影片。",
@@ -1284,6 +1415,24 @@
         coverUpdating: "Updating cover…",
         coverUpdated: "Cover updated",
         coverUpdateFailed: "Could not update the cover, please try again",
+        coverEditorTitle: "✏️ Edit cover text",
+        coverEditorHelp: "Rewrite anything on the cover — top label, headlines, English supporting line, bottom hook. Apply re-renders the cover (no video re-encode, ~1s).",
+        coverEditorPov: "Top label (e.g. POV)",
+        coverEditorMain1: "Main headline line 1",
+        coverEditorMain2: "Main headline line 2",
+        coverEditorEnglish: "English supporting line",
+        coverEditorBottom1: "Bottom line 1",
+        coverEditorBottom2: "Bottom line 2",
+        coverEditorEnMain1: "Main headline line 1",
+        coverEditorEnMain2: "Main headline line 2",
+        coverEditorEnBottom1: "Bottom line 1",
+        coverEditorEnBottom2: "Bottom line 2",
+        coverEditorApply: "Apply text",
+        coverEditorReset: "Revert to auto-generated text",
+        coverEditorApplying: "Re-rendering cover…",
+        coverEditorApplied: "Cover text applied",
+        coverEditorReverted: "Reverted to the original auto-generated text",
+        coverEditorTooLong: "Each line is capped at 60 characters",
         outputVideoTitle: "Output video",
         verifyTitle: "Caption check (editable)",
         verifyHelp: "Click the time on the left to jump the video. Click a ZH or EN cell to edit. When you're done, press \"Apply caption edits\" below to re-burn the video.",
@@ -1415,7 +1564,7 @@
         if ((data.status !== "done" && data.status !== "complete") || !data.result) return;
         const videoUrl = `/outputs/${snapshot.job_id}/${data.result.video}`;
         const coverUrl = `/outputs/${snapshot.job_id}/${data.result.cover}?t=${Date.now()}`;
-        renderResult(snapshot.job_id, videoUrl, coverUrl, data.result.cover_candidates || [], data.result.cover_style || snapshot.cover_style);
+        renderResult(snapshot.job_id, videoUrl, coverUrl, data.result.cover_candidates || [], data.result.cover_style || snapshot.cover_style, data.result.cover_copy || {});
       } catch (err) {
         // Network blip — silently leave the user on a fresh upload UI.
         console.warn("restoreSession failed:", err);
@@ -1924,7 +2073,7 @@
       if ((data.status === "done" || data.status === "complete") && data.result) {
         const videoUrl = `/outputs/${jobId}/${data.result.video}`;
         const coverUrl = `/outputs/${jobId}/${data.result.cover}?t=${Date.now()}`;
-        renderResult(jobId, videoUrl, coverUrl, data.result.cover_candidates || [], data.result.cover_style);
+        renderResult(jobId, videoUrl, coverUrl, data.result.cover_candidates || [], data.result.cover_style, data.result.cover_copy || {});
         snapshotSession(currentLang);
         return;
       }
@@ -2004,7 +2153,7 @@
       state.innerHTML = `<span class="ok">${t("done")}</span>`;
       const videoUrl = `/outputs/${jobId}/${data.result.video}`;
       const coverUrl = `/outputs/${jobId}/${data.result.cover}?t=${Date.now()}`;
-      renderResult(jobId, videoUrl, coverUrl, data.result.cover_candidates || [], data.result.cover_style);
+      renderResult(jobId, videoUrl, coverUrl, data.result.cover_candidates || [], data.result.cover_style, data.result.cover_copy || {});
       // Persist under the language the job was UPLOADED in, NOT the current
       // language. If the user already flipped languages while it ran, the
       // result still belongs to its source language.
@@ -2036,7 +2185,7 @@
       return checked ? checked.value : "editorial";
     }
 
-    function renderResult(jobId, videoUrl, coverUrl, candidates, initialStyle) {
+    function renderResult(jobId, videoUrl, coverUrl, candidates, initialStyle, coverCopy) {
       const styleNow = initialStyle || activeCoverStyle();
       const styleButtons = STYLE_SWITCHER_ORDER.map((value) => {
         const label = (COVER_STYLE_LABELS[value] || {})[currentLang] || value;
@@ -2068,6 +2217,20 @@
             <div id="coverStatusLine" class="status-line"></div>
           </div>
         </section>
+        <section class="cover-editor" id="coverEditorSection">
+          <details>
+            <summary>${t("coverEditorTitle")}</summary>
+            <div class="cover-editor-body">
+              <p class="hint" id="coverEditorHelp">${t("coverEditorHelp")}</p>
+              <div class="cover-editor-grid" id="coverEditorGrid"></div>
+              <div class="cover-editor-actions">
+                <button class="primary" type="button" id="coverEditorApply">${t("coverEditorApply")}</button>
+                <button class="secondary" type="button" id="coverEditorReset">${t("coverEditorReset")}</button>
+                <span id="coverEditorStatus" class="cover-editor-status"></span>
+              </div>
+            </div>
+          </details>
+        </section>
         ${candidateMarkup}
         <section class="output-video">
           <h3>${t("outputVideoTitle")}</h3>
@@ -2094,6 +2257,17 @@
       result.classList.add("show");
       result.dataset.jobId = jobId;
       result.dataset.style = styleNow;
+      // Stash the ORIGINAL (auto-generated) cover copy ONCE — the reset
+      // button restores from here, so it has to survive subsequent edits.
+      // If we ever roll the user back to a server-side baseline that's
+      // different from what they saw on first paint, that's confusing —
+      // first-paint wins.
+      const seedCopy = coverCopy || {};
+      if (!result.dataset.coverCopyOriginal) {
+        result.dataset.coverCopyOriginal = JSON.stringify(seedCopy);
+      }
+      result.dataset.coverCopy = JSON.stringify(seedCopy);
+      renderCoverEditor(jobId, seedCopy, currentLang);
       if (candidates.length) {
         renderCandidates(jobId, candidates);
       }
@@ -2112,6 +2286,203 @@
         // where to drop the next file.
         document.querySelector(".drop")?.scrollIntoView({behavior: "smooth", block: "center"});
       });
+    }
+
+    // ── Cover-text editor ────────────────────────────────────────────────
+    // Per-language field set. POV / top_label is shared between languages,
+    // everything else maps to the language-specific cover_copy slot. The
+    // backend whitelist (EDITABLE_COVER_TEXT_KEYS in app.py) MUST stay in
+    // sync with the `key` values below.
+    function coverEditorFieldsFor(lang) {
+      if (lang === "en") {
+        return [
+          { key: "top_label",         labelKey: "coverEditorPov",        full: false },
+          { key: "en_main_line_1",    labelKey: "coverEditorEnMain1",    full: false },
+          { key: "en_main_line_2",    labelKey: "coverEditorEnMain2",    full: false },
+          { key: "en_bottom_line_1",  labelKey: "coverEditorEnBottom1",  full: false },
+          { key: "en_bottom_line_2",  labelKey: "coverEditorEnBottom2",  full: false },
+        ];
+      }
+      return [
+        { key: "top_label",      labelKey: "coverEditorPov",      full: false },
+        { key: "main_line_1",    labelKey: "coverEditorMain1",    full: false },
+        { key: "main_line_2",    labelKey: "coverEditorMain2",    full: false },
+        { key: "english_line",   labelKey: "coverEditorEnglish",  full: true  },
+        { key: "bottom_line_1",  labelKey: "coverEditorBottom1",  full: false },
+        { key: "bottom_line_2",  labelKey: "coverEditorBottom2",  full: false },
+      ];
+    }
+
+    function renderCoverEditor(jobId, coverCopy, lang) {
+      const grid = document.getElementById("coverEditorGrid");
+      if (!grid) return;
+      const fields = coverEditorFieldsFor(lang);
+      const helpNode = document.getElementById("coverEditorHelp");
+      if (helpNode) helpNode.textContent = t("coverEditorHelp");
+      const summary = document.querySelector("#coverEditorSection summary");
+      if (summary) summary.textContent = t("coverEditorTitle");
+      grid.innerHTML = fields.map((f) => `
+        <div class="cover-editor-field${f.full ? " full" : ""}">
+          <label for="ce_${f.key}">${t(f.labelKey)}</label>
+          <input
+            id="ce_${f.key}"
+            type="text"
+            maxlength="60"
+            spellcheck="false"
+            autocomplete="off"
+            data-key="${f.key}"
+            data-original="${escapeHtml(coverCopy[f.key] || "")}"
+            value="${escapeHtml(coverCopy[f.key] || "")}">
+        </div>
+      `).join("");
+      // Mark dirty on input so the user sees which lines they've changed
+      // (yellow highlight matches the transcript-edit dirty state).
+      grid.querySelectorAll("input").forEach((input) => {
+        input.addEventListener("input", () => {
+          input.classList.toggle("dirty", input.value !== (input.dataset.original || ""));
+        });
+      });
+      const applyBtn = document.getElementById("coverEditorApply");
+      const resetBtn = document.getElementById("coverEditorReset");
+      const status = document.getElementById("coverEditorStatus");
+      if (applyBtn) {
+        applyBtn.textContent = t("coverEditorApply");
+        applyBtn.onclick = () => applyCoverEdits(jobId);
+      }
+      if (resetBtn) {
+        resetBtn.textContent = t("coverEditorReset");
+        resetBtn.onclick = () => resetCoverEdits(jobId);
+      }
+      if (status) {
+        // Clear stale status from a previous render — it would otherwise
+        // claim success against an unrelated cover state.
+        status.classList.remove("bad");
+        status.textContent = "";
+      }
+    }
+
+    function readCoverEditorPayload() {
+      // Collect every field's current value (NOT just dirty ones) so the
+      // backend has a complete record of what the cover should show. A
+      // dirty-only diff would let stale auto-generated text creep back in
+      // after a style switch that re-runs build_cover_copy.
+      const payload = {};
+      document.querySelectorAll("#coverEditorGrid input[data-key]").forEach((input) => {
+        payload[input.dataset.key] = input.value;
+      });
+      return payload;
+    }
+
+    async function applyCoverEdits(jobId) {
+      const status = document.getElementById("coverEditorStatus");
+      const applyBtn = document.getElementById("coverEditorApply");
+      const resetBtn = document.getElementById("coverEditorReset");
+      if (status) {
+        status.classList.remove("bad");
+        status.textContent = t("coverEditorApplying");
+      }
+      if (applyBtn) applyBtn.disabled = true;
+      if (resetBtn) resetBtn.disabled = true;
+      // Guard against over-long lines client-side too — the server cap is
+      // 60 chars per line and a 413 would feel confusing without context.
+      const payload = readCoverEditorPayload();
+      for (const value of Object.values(payload)) {
+        if ((value || "").length > 60) {
+          if (status) {
+            status.classList.add("bad");
+            status.textContent = t("coverEditorTooLong");
+          }
+          if (applyBtn) applyBtn.disabled = false;
+          if (resetBtn) resetBtn.disabled = false;
+          return;
+        }
+      }
+      try {
+        const response = await fetch(`/jobs/${jobId}/cover`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cover_text: payload,
+            style: result.dataset.style || activeCoverStyle(),
+            language: currentLang === "en" ? "en" : "zh",
+          }),
+        });
+        const json = await response.json();
+        if (!response.ok) throw new Error(json.error || t("coverUpdateFailed"));
+        const coverImage = document.getElementById("coverImage");
+        const openCoverLink = document.getElementById("openCoverLink");
+        if (coverImage) coverImage.src = json.cover_url;
+        if (openCoverLink) openCoverLink.href = json.cover_url;
+        if (json.cover_copy) {
+          result.dataset.coverCopy = JSON.stringify(json.cover_copy);
+          // Refresh inputs so the new "original" reflects what's now persisted
+          // (so subsequent dirty-marking compares against the persisted state).
+          document.querySelectorAll("#coverEditorGrid input[data-key]").forEach((input) => {
+            const newVal = json.cover_copy[input.dataset.key] || "";
+            input.dataset.original = newVal;
+            input.value = newVal;
+            input.classList.remove("dirty");
+          });
+        }
+        if (status) status.textContent = t("coverEditorApplied");
+      } catch (err) {
+        if (status) {
+          status.classList.add("bad");
+          status.textContent = err.message || t("coverUpdateFailed");
+        }
+      } finally {
+        if (applyBtn) applyBtn.disabled = false;
+        if (resetBtn) resetBtn.disabled = false;
+      }
+    }
+
+    async function resetCoverEdits(jobId) {
+      // Restore from the snapshot we took on first render. We send the WHOLE
+      // original cover_copy back through the same endpoint so server state
+      // matches what the user sees, then refresh the inputs.
+      let original = {};
+      try {
+        original = JSON.parse(result.dataset.coverCopyOriginal || "{}");
+      } catch (err) { original = {}; }
+      // Push original into the inputs so the request below reflects them.
+      document.querySelectorAll("#coverEditorGrid input[data-key]").forEach((input) => {
+        const key = input.dataset.key;
+        const val = original[key] || "";
+        input.value = val;
+        input.dataset.original = val;
+        input.classList.remove("dirty");
+      });
+      const status = document.getElementById("coverEditorStatus");
+      if (status) {
+        status.classList.remove("bad");
+        status.textContent = t("coverEditorApplying");
+      }
+      try {
+        const response = await fetch(`/jobs/${jobId}/cover`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cover_text: readCoverEditorPayload(),
+            style: result.dataset.style || activeCoverStyle(),
+            language: currentLang === "en" ? "en" : "zh",
+          }),
+        });
+        const json = await response.json();
+        if (!response.ok) throw new Error(json.error || t("coverUpdateFailed"));
+        const coverImage = document.getElementById("coverImage");
+        const openCoverLink = document.getElementById("openCoverLink");
+        if (coverImage) coverImage.src = json.cover_url;
+        if (openCoverLink) openCoverLink.href = json.cover_url;
+        if (json.cover_copy) {
+          result.dataset.coverCopy = JSON.stringify(json.cover_copy);
+        }
+        if (status) status.textContent = t("coverEditorReverted");
+      } catch (err) {
+        if (status) {
+          status.classList.add("bad");
+          status.textContent = err.message || t("coverUpdateFailed");
+        }
+      }
     }
 
     function lockTopCoverStyle(selectedStyle) {
@@ -2293,6 +2664,9 @@
         ".download",
         ".transcript-cell",
         ".transcript-seek",
+        "#coverEditorApply",
+        "#coverEditorReset",
+        ".cover-editor-field input",
       ];
       selectors.forEach((sel) => {
         result.querySelectorAll(sel).forEach((node) => {

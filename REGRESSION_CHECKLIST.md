@@ -40,6 +40,28 @@ Date last passed end-to-end: _(none)_
 - [ ] Silence cuts only fire on pauses > 0.74s with 280 ms padding on
       each side (Chinese-tuned)
 
+## Editable cover text
+
+- [ ] "✏️ 編輯封面文字" panel collapsed by default on result page
+- [ ] Opening it shows all 6 ZH slots (POV / main 1 / main 2 / english /
+      bottom 1 / bottom 2) OR all 5 EN slots (POV / main 1 / main 2 /
+      bottom 1 / bottom 2) based on currentLang
+- [ ] Editing a field highlights yellow (dirty state)
+- [ ] "套用文案" POSTs to /jobs/<id>/cover with `cover_text` payload
+      and ALL field values (not just dirty ones)
+- [ ] Lines >60 chars rejected client-side AND server-side with a clear
+      error message
+- [ ] Unknown keys (font_family, font_size, anything not in
+      EDITABLE_COVER_TEXT_KEYS) are silently dropped server-side
+- [ ] Cover image refreshes in-place after apply (cache buster via `?t=`)
+- [ ] Edited cover_copy persists into result.json
+- [ ] Style flip (editorial ↔ hook_caption) preserves the user's edits
+- [ ] Candidate flip preserves the user's edits
+- [ ] Page reload restores the edited copy (read from result.json)
+- [ ] "還原為原本的文字" restores the snapshot taken on first render
+- [ ] Editor inputs + buttons disabled during caption re-burn
+      (setResultPanelBusy lock)
+
 ## Editable transcript
 
 - [ ] Transcript table loads after the job completes

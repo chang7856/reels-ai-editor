@@ -94,6 +94,21 @@ MAX_RETENTION_SECONDS = 15 * 60
 ALLOWED_EXTENSIONS = {".mp4", ".mov", ".m4v"}
 ALLOWED_COVER_STYLES = {"editorial", "hook_caption", "creator"}
 ALLOWED_LANGUAGES = {"zh", "en"}
+# Whitelist of cover_copy keys the user can rewrite from the GUI. We keep this
+# narrow so a crafted payload can't inject arbitrary attrs (e.g. font paths,
+# colour overrides) into the cover dict via the same endpoint.
+EDITABLE_COVER_TEXT_KEYS = {
+    "top_label",
+    "main_line_1", "main_line_2", "english_line",
+    "bottom_line_1", "bottom_line_2",
+    "en_main_line_1", "en_main_line_2",
+    "en_bottom_line_1", "en_bottom_line_2",
+}
+# Per-line length cap. Lines longer than this overflow the cover canvas
+# regardless of font fitting, so we reject before the render call instead of
+# silently producing a clipped cover. 60 chars covers any reasonable
+# wrapped headline; the cover itself is 720 px wide.
+MAX_COVER_TEXT_LINE_CHARS = 60
 STAGE_MODEL = {
     "upload": {"start": 0, "end": 18, "label": "上傳影片"},
     "validate": {"start": 18, "end": 34, "label": "檢查格式與長度"},
@@ -408,15 +423,46 @@ def regenerate_cover(job_id):
     if requested_language and requested_language not in ALLOWED_LANGUAGES:
         return jsonify({"error": "不支援的語言"}), 400
 
+    # `cover_text` is the user's per-line override of the auto-generated
+    # cover copy. Keys are whitelisted (EDITABLE_COVER_TEXT_KEYS) and each
+    # value is length-capped so a paste-bomb can't blow the layout. Once
+    # accepted, the override is persisted into result.json so flipping the
+    # candidate or the style afterwards preserves what the user typed.
+    cover_text_payload = payload.get("cover_text")
+    if cover_text_payload is not None and not isinstance(cover_text_payload, dict):
+        return jsonify({"error": "封面文字格式錯誤"}), 400
+    cover_text_overrides = {}
+    if isinstance(cover_text_payload, dict):
+        for key, raw_value in cover_text_payload.items():
+            if key not in EDITABLE_COVER_TEXT_KEYS:
+                # Silently drop unknown keys — guarding the whitelist matters
+                # more than telling the GUI it picked the wrong field name.
+                continue
+            if raw_value is None:
+                cover_text_overrides[key] = ""
+                continue
+            if not isinstance(raw_value, str):
+                return jsonify({"error": f"封面文字格式錯誤：{key}"}), 400
+            text = raw_value.strip()
+            if len(text) > MAX_COVER_TEXT_LINE_CHARS:
+                return jsonify({
+                    "error": f"封面文字過長（單行最多 {MAX_COVER_TEXT_LINE_CHARS} 字元）：{key}",
+                }), 400
+            cover_text_overrides[key] = text
+
     # Import lazily so the Flask process does not need to load Whisper at boot.
     from reels_gui_pipeline import render_cover
 
     memory = result.get("memory") or json.loads(MEMORY.read_text())
-    cover_copy = result.get("cover_copy")
+    cover_copy = dict(result.get("cover_copy") or {})
+    # Merge overrides AFTER reading the persisted copy so the user's previous
+    # edits stay sticky across cover_style / candidate flips.
+    if cover_text_overrides:
+        cover_copy.update(cover_text_overrides)
     style = (
         requested_style
         or result.get("cover_style")
-        or (cover_copy or {}).get("default_style")
+        or cover_copy.get("default_style")
         or "editorial"
     )
     language = requested_language or result.get("language") or "zh"
@@ -435,6 +481,9 @@ def regenerate_cover(job_id):
     result["selected_cover_candidate"] = candidate_name
     result["cover_style"] = style
     result["language"] = language
+    # Persist the merged cover_copy so the next style switch / candidate
+    # flip / page reload picks up the edits.
+    result["cover_copy"] = cover_copy
     result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2))
 
     cover_url = f"/outputs/{job_id}/{result['cover']}?t={int(time.time())}"
@@ -445,6 +494,7 @@ def regenerate_cover(job_id):
         "language": language,
         "cover_url": cover_url,
         "cover_candidates": candidates,
+        "cover_copy": cover_copy,
     })
 
 

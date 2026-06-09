@@ -124,6 +124,100 @@ gate 'target="_blank" on Open Video' \
 echo "=== Frontend: result-panel busy lock ==="
 gate "setResultPanelBusy helper exists" \
     'grep -q "setResultPanelBusy" templates/index.html'
+gate "busy lock covers cover-editor inputs + buttons" \
+    'grep -q "coverEditorApply" templates/index.html && grep -q "cover-editor-field input" templates/index.html'
+
+echo "=== Cover-text editor: backend whitelist + GUI fields ==="
+gate "EDITABLE_COVER_TEXT_KEYS whitelist defined" \
+    'grep -q "EDITABLE_COVER_TEXT_KEYS" app.py'
+gate "cover_text payload accepted by /jobs/<id>/cover" \
+    'grep -q "cover_text_payload" app.py'
+gate "cover_copy persisted back to result.json" \
+    'grep -q "result\\[\"cover_copy\"\\] = cover_copy" app.py'
+gate "60-char per-line cap enforced" \
+    'grep -q "MAX_COVER_TEXT_LINE_CHARS" app.py'
+gate "GUI editor section in renderResult" \
+    'grep -q "cover-editor" templates/index.html && grep -q "coverEditorFieldsFor" templates/index.html'
+gate "GUI ZH editor covers all 6 cover slots" \
+    'grep -q "coverEditorPov" templates/index.html && grep -q "coverEditorMain1" templates/index.html && grep -q "coverEditorEnglish" templates/index.html && grep -q "coverEditorBottom1" templates/index.html'
+gate "GUI EN editor covers 4 EN slots + POV" \
+    'grep -q "coverEditorEnMain1" templates/index.html && grep -q "coverEditorEnBottom1" templates/index.html'
+
+.venv-arm64/bin/python <<'PY'
+# Backend live round-trip: send a cover_text override against a synthetic
+# result.json so we catch any drift between app.py's whitelist and what
+# the cover_copy dict actually carries.
+import json, sys, tempfile, shutil
+from pathlib import Path
+
+sys.path.insert(0, '.')
+from app import app, OUTPUTS, EDITABLE_COVER_TEXT_KEYS
+
+job_id = "_smoke_cover_text"
+job_dir = OUTPUTS / job_id
+if job_dir.exists():
+    shutil.rmtree(job_dir)
+job_dir.mkdir(parents=True)
+# Minimal result.json + a candidate frame the endpoint can copy over.
+cover_base = job_dir / "reels_cover.jpg"
+candidate = job_dir / "cover_candidate_0.jpg"
+from PIL import Image
+Image.new("RGB", (720, 1280), (180, 200, 220)).save(candidate)
+Image.new("RGB", (720, 1280), (180, 200, 220)).save(cover_base)
+result = {
+    "video": "reels_ig_compressed.mp4",
+    "cover": "reels_cover.jpg",
+    "cover_style": "editorial",
+    "language": "zh",
+    "cover_copy": {
+        "top_label": "POV",
+        "main_line_1": "原本的標題",
+        "main_line_2": "原本的副標",
+        "english_line": "Old english line",
+        "bottom_line_1": "原本下面",
+        "bottom_line_2": "原本下面 2",
+    },
+    "cover_candidates": [{"filename": "cover_candidate_0.jpg", "selected": True}],
+    "selected_cover_candidate": "cover_candidate_0.jpg",
+    "memory": json.loads(Path("reels_memory.json").read_text()),
+}
+(job_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2))
+
+with app.test_client() as c:
+    rsp = c.post(f"/jobs/{job_id}/cover", json={
+        "cover_text": {
+            "main_line_1": "我寫了 App",
+            "main_line_2": "可以改文字了",
+            "english_line": "I built my own editor",
+        },
+    })
+    assert rsp.status_code == 200, f"cover_text edit failed: {rsp.status_code} {rsp.get_data(as_text=True)}"
+    body = rsp.get_json()
+    cc = body.get("cover_copy") or {}
+    assert cc.get("main_line_1") == "我寫了 App", f"edit not applied: {cc}"
+    assert cc.get("main_line_2") == "可以改文字了"
+    assert cc.get("english_line") == "I built my own editor"
+    # Untouched fields stay as originals
+    assert cc.get("top_label") == "POV"
+    assert cc.get("bottom_line_1") == "原本下面"
+
+    # Reject too-long line
+    rsp2 = c.post(f"/jobs/{job_id}/cover", json={
+        "cover_text": {"main_line_1": "長" * 70},
+    })
+    assert rsp2.status_code == 400, f"too-long line not rejected: {rsp2.status_code}"
+
+    # Unknown key silently dropped
+    rsp3 = c.post(f"/jobs/{job_id}/cover", json={
+        "cover_text": {"font_family": "Comic Sans"},
+    })
+    assert rsp3.status_code == 200
+    assert "font_family" not in (rsp3.get_json().get("cover_copy") or {})
+
+# Cleanup
+shutil.rmtree(job_dir)
+print("  PASS  cover_text round-trip (apply + length cap + key whitelist)")
+PY
 
 echo ""
 echo "==============================================="
