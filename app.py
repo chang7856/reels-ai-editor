@@ -92,7 +92,7 @@ MAX_DURATION_SECONDS = 600
 # window protects their footage and keeps disk usage near-zero.
 MAX_RETENTION_SECONDS = 15 * 60
 ALLOWED_EXTENSIONS = {".mp4", ".mov", ".m4v"}
-ALLOWED_COVER_STYLES = {"editorial", "hook_caption", "magazine_pop", "creator", "high_contrast"}
+ALLOWED_COVER_STYLES = {"editorial", "hook_caption", "creator"}
 ALLOWED_LANGUAGES = {"zh", "en"}
 STAGE_MODEL = {
     "upload": {"start": 0, "end": 18, "label": "上傳影片"},
@@ -296,8 +296,25 @@ def create_job():
     child_env = os.environ.copy()
     child_env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
     child_env.setdefault("OMP_NUM_THREADS", "4")
+
+    # CRITICAL: in a PyInstaller-frozen .app, sys.executable is the
+    # bootloader binary itself (not a Python). Re-invoking it with the
+    # special "--pipeline" sentinel routes to launch.py's
+    # _run_pipeline_mode() which calls reels_gui_pipeline.main() inside
+    # the .app's bundled Python -- so the child process has mlx-whisper,
+    # ctranslate2, bundled ffmpeg, and our converted Marian model.
+    #
+    # In dev mode (running app.py directly with system Python), we use
+    # the same interpreter that's running Flask so deps are consistent.
+    if getattr(sys, "frozen", False):
+        spawn_cmd = [sys.executable, "--pipeline",
+                     str(source), str(job_dir), str(options_path)]
+    else:
+        spawn_cmd = [sys.executable, str(PIPELINE),
+                     str(source), str(job_dir), str(options_path)]
+
     process = subprocess.Popen(
-        ["python3", str(PIPELINE), str(source), str(job_dir), str(options_path)],
+        spawn_cmd,
         stdout=log_file,
         stderr=subprocess.STDOUT,
         cwd=str(ROOT),
@@ -428,6 +445,45 @@ def regenerate_cover(job_id):
         "language": language,
         "cover_url": cover_url,
         "cover_candidates": candidates,
+    })
+
+
+@app.post("/jobs/<job_id>/captions")
+def regenerate_captions(job_id):
+    """Re-render the burnt-in video using user-edited captions.
+
+    Expected JSON body: {"segments": [{"start": float, "end": float,
+                                       "zh": str, "en": str}, ...]}
+
+    The verification table on the result panel posts this when the user
+    clicks "套用字幕修改". The actual render runs inside the Flask
+    process (synchronous) because the user is sitting in front of the
+    spinner -- typical wall time ~30s with h264_videotoolbox.
+    """
+    cleanup_old_files()
+    job_dir = OUTPUTS / job_id
+    if not (job_dir / "result.json").exists():
+        return jsonify({"error": "找不到這個任務或結果尚未完成"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    segments = payload.get("segments")
+    if not isinstance(segments, list) or not segments:
+        return jsonify({"error": "字幕內容格式錯誤"}), 400
+
+    # Import lazily so Flask boot doesn't pay the cost on every restart.
+    from reels_gui_pipeline import re_render_with_edited_captions
+
+    try:
+        re_render_with_edited_captions(job_dir, segments)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 410
+    except Exception as exc:
+        return jsonify({"error": f"重新產生字幕失敗：{exc}"}), 500
+
+    video_url = f"/outputs/{job_id}/reels_ig_compressed.mp4?t={int(time.time())}"
+    return jsonify({
+        "job_id": job_id,
+        "video_url": video_url,
     })
 
 

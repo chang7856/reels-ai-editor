@@ -14,3 +14,6 @@ sentencepiece>=0.1.99
 # ~20-60x realtime on M2/M3). Installed only on macOS arm64; the pipeline
 # auto-falls-back to faster-whisper on Intel / Windows / Linux.
 mlx-whisper>=0.4; sys_platform == "darwin" and platform_machine == "arm64"
+# mlx_whisper.timing imports scipy.signal at module load. Declare it
+# explicitly so pip resolves it before PyInstaller's analysis.
+scipy>=1.10; sys_platform == "darwin" and platform_machine == "arm64"

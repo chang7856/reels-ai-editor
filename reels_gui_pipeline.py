@@ -113,14 +113,22 @@ def _can_use_mlx():
     budget. So this branch is the whole speed story on Apple Silicon.
     """
     if platform.system() != "Darwin":
+        log(f"  MLX: skip ({platform.system()} != Darwin)")
         return False
     if platform.machine() != "arm64":
+        log(f"  MLX: skip (arch={platform.machine()})")
         return False
     try:
         import mlx_whisper  # noqa: F401
         import mlx.core as mx
-        return bool(mx.metal.is_available())
-    except Exception:
+        ok = bool(mx.metal.is_available())
+        log(f"  MLX import OK from {mlx_whisper.__file__}; metal available = {ok}")
+        return ok
+    except Exception as exc:
+        import traceback
+        log(f"  MLX detection FAILED: {type(exc).__name__}: {exc}")
+        for line in traceback.format_exc().splitlines():
+            log(f"    {line}")
         return False
 
 
@@ -196,16 +204,124 @@ def load_translator(memory, job_dir=None):
     return (translator, sp_src, sp_tgt)
 
 
-def translate_zh_to_en(translator_bundle, zh_segments, out_json, job_dir=None):
-    """Translate every ZH segment to EN using Marian opus-mt-zh-en (via
-    ctranslate2). Returns rows aligned 1:1 with zh_segments using the same
-    {"start", "end", "text"} shape downstream code expects, so the existing
-    `_build_en_assignments` proportional-split helper still works (it
-    becomes a no-op for 1:1 segments, which is exactly what we want).
+_SENTENCE_TERMINATORS = ("。", "！", "？", "!", "?", ".")
 
-    Marian per-segment translation is ~50-100x faster than Whisper's
-    translate task at this content scale, and the alignment is automatic
-    because each EN inherits its source ZH's timestamps.
+
+def _group_zh_into_sentences(zh_segments, max_chars=80, max_gap=0.8):
+    """Group consecutive ZH segments into sentence-like batches so Marian
+    sees enough context to produce coherent English instead of fragments.
+
+    A new batch starts when ANY of the following is true for the current
+    segment:
+      * Its text ends with terminal punctuation (Chinese or ASCII)
+      * The gap to the next segment exceeds `max_gap` seconds (long pause)
+      * The cumulative character count for the current batch exceeds
+        `max_chars` (defensive cap so Marian context never explodes)
+
+    Returns: list of (start_index, end_index) half-open ranges.
+    """
+    groups = []
+    if not zh_segments:
+        return groups
+    cur_start = 0
+    cur_chars = 0
+    for i, zh in enumerate(zh_segments):
+        cur_chars += len(zh.get("text", ""))
+        text_clean = (zh.get("text") or "").rstrip(" 、,，；;\t\n")
+        terminal = text_clean.endswith(_SENTENCE_TERMINATORS)
+        next_gap = (
+            (zh_segments[i + 1]["start"] - zh["end"])
+            if i + 1 < len(zh_segments) else 0.0
+        )
+        if terminal or next_gap > max_gap or cur_chars > max_chars:
+            groups.append((cur_start, i + 1))
+            cur_start = i + 1
+            cur_chars = 0
+    if cur_start < len(zh_segments):
+        groups.append((cur_start, len(zh_segments)))
+    return groups
+
+
+def produce_en_segments(memory, wav, zh_segments, out_json, job_dir=None):
+    """Top-level dispatch for ZH -> EN subtitle production.
+
+    On Apple Silicon arm64 with MLX available: runs mlx-whisper-medium with
+    task='translate' against the source audio. Quality on talking-head
+    Chinese is dramatically better than dedicated NMT models (tested Marian
+    opus-mt-zh-en, NLLB-200-distilled-600M) because Whisper was pre-trained
+    on subtitled video data exactly like the user's content. Cost: ~98s on
+    3-min audio (one-time model download ~1.5 GB on first run).
+
+    Elsewhere (Intel macOS, Windows, Linux): falls back to the bundled
+    Marian opus-mt-zh-en CT2 model. Faster (~1s) but lower quality.
+
+    Returns a list of {"start", "end", "text"} segments. Whisper translate
+    decides its own segment boundaries, so downstream build_ass uses
+    _build_en_assignments to distribute these across the (separately
+    produced) ZH segments by time-overlap.
+    """
+    if _can_use_mlx():
+        return _translate_with_mlx_whisper(memory, wav, out_json, job_dir)
+    translator = load_translator(memory, job_dir)
+    return translate_zh_to_en(translator, zh_segments, out_json, job_dir)
+
+
+def _translate_with_mlx_whisper(memory, wav, out_json, job_dir=None):
+    """ZH -> EN translation via mlx-whisper task='translate'.
+
+    Uses a SEPARATE Whisper model from the ZH-transcribe pass (the turbo
+    model used for transcribe does not support translate well -- it was
+    trained without translation data). We default to whisper-medium-mlx
+    which balances quality (much better than Marian / NLLB-600M) against
+    speed (~98s on 3-min audio, vs whisper-large-v3's ~400s).
+    """
+    perf = memory.get("performance", {})
+    repo = perf.get("mlx_translate_repo", "mlx-community/whisper-medium-mlx")
+    if job_dir:
+        write_progress(job_dir, "transcribe", f"正在翻譯英文字幕（Whisper translate）")
+    log(f"3b/7 ZH -> EN translation via mlx-whisper {repo}")
+    import mlx_whisper
+    result = mlx_whisper.transcribe(
+        str(wav),
+        path_or_hf_repo=repo,
+        task="translate",
+        language="zh",
+        temperature=0.0,
+        condition_on_previous_text=False,  # off: faster, fewer hallucinations
+        word_timestamps=False,
+    )
+    rows = []
+    for seg in result.get("segments", []):
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        rows.append({
+            "start": float(seg.get("start", 0.0)),
+            "end": float(seg.get("end", 0.0)),
+            "text": text,
+        })
+    log(f"  Whisper translate: {len(rows)} EN segments")
+    if out_json:
+        out_json.write_text(json.dumps(
+            {"language": "en", "task": "mlx-whisper-translate", "backend": repo, "segments": rows},
+            ensure_ascii=False, indent=2,
+        ))
+    return rows
+
+
+def translate_zh_to_en(translator_bundle, zh_segments, out_json, job_dir=None):
+    """Translate ZH segments to EN using Marian opus-mt-zh-en (CT2 int8).
+
+    Strategy: merge consecutive ZH segments into sentence-level batches
+    (`_group_zh_into_sentences`), translate each batch as ONE input so
+    Marian has enough context to produce a coherent English sentence,
+    then split the English words back to constituent ZH segments by
+    char-count proportion. This avoids the per-segment-translation
+    fragmentation that produces repeated words and untranslated mid-clause
+    fragments leaking source CJK characters.
+
+    Returns rows aligned 1:1 with zh_segments using the
+    {"start", "end", "text"} shape downstream code expects.
     """
     if not zh_segments or translator_bundle is None:
         if out_json:
@@ -215,30 +331,79 @@ def translate_zh_to_en(translator_bundle, zh_segments, out_json, job_dir=None):
         return []
     if job_dir:
         write_progress(job_dir, "transcribe", "正在翻譯英文字幕")
-    log(f"3b/7 ZH -> EN translation ({len(zh_segments)} segments via Marian)")
     translator, sp_src, sp_tgt = translator_bundle
 
-    src_texts = [seg["text"].strip() for seg in zh_segments]
-    src_tokens = [sp_src.EncodeAsPieces(text) if text else [] for text in src_texts]
+    groups = _group_zh_into_sentences(zh_segments)
+    log(f"3b/7 ZH -> EN translation ({len(zh_segments)} segments grouped into {len(groups)} sentences via Marian)")
+
+    # Build one source string per sentence group. We strip per-segment text
+    # to avoid double-spacing, and Marian's SentencePiece tokenizer handles
+    # the joined Chinese fine without needing explicit word boundaries.
+    batch_sources = []
+    for start_idx, end_idx in groups:
+        merged_zh = "".join(zh_segments[i].get("text", "").strip() for i in range(start_idx, end_idx))
+        batch_sources.append(merged_zh)
+    src_tokens = [sp_src.EncodeAsPieces(text) if text else [] for text in batch_sources]
 
     results = translator.translate_batch(
         src_tokens,
-        beam_size=1,
-        max_decoding_length=256,
+        beam_size=2,             # slight quality bump vs greedy, still cheap
+        max_decoding_length=384,
         replace_unknowns=True,
+        no_repeat_ngram_size=2,  # blocks "Today today" / "First of first" / "design designs"
+        repetition_penalty=1.2,  # extra nudge against Marian's loop pathology
     )
 
-    rows = []
-    for zh, result in zip(zh_segments, results):
+    # Per-group: decode EN, then proportionally split EN words back to
+    # constituent ZH segments by ZH char count so each subtitle frame still
+    # gets its own EN line aligned to its audio window.
+    rows = [None] * len(zh_segments)
+    for (start_idx, end_idx), result in zip(groups, results):
         if result.hypotheses:
-            text = sp_tgt.DecodePieces(result.hypotheses[0]).strip()
+            full_en = sp_tgt.DecodePieces(result.hypotheses[0]).strip()
         else:
-            text = ""
-        rows.append({"start": zh["start"], "end": zh["end"], "text": text})
+            full_en = ""
+        en_words = full_en.split()
+        constituent = list(range(start_idx, end_idx))
+
+        if len(constituent) == 1:
+            rows[constituent[0]] = {
+                "start": zh_segments[constituent[0]]["start"],
+                "end": zh_segments[constituent[0]]["end"],
+                "text": full_en,
+            }
+            continue
+
+        # Multi-segment group: divide EN words across ZH segments by ZH char
+        # count (longer ZH chunk = bigger EN slice). Edge case: very short
+        # EN with many ZH segments -- give each at least 1 word until we run
+        # out, then leave the rest empty rather than padding nonsense.
+        char_weights = [max(1, len(zh_segments[i].get("text", ""))) for i in constituent]
+        total_weight = sum(char_weights)
+        cursor = 0
+        for slot_idx, zh_idx in enumerate(constituent):
+            if slot_idx == len(constituent) - 1:
+                portion = en_words[cursor:]
+            else:
+                share = max(1, int(round(len(en_words) * char_weights[slot_idx] / total_weight)))
+                share = min(share, max(0, len(en_words) - cursor - (len(constituent) - slot_idx - 1)))
+                portion = en_words[cursor:cursor + share]
+                cursor += share
+            rows[zh_idx] = {
+                "start": zh_segments[zh_idx]["start"],
+                "end": zh_segments[zh_idx]["end"],
+                "text": " ".join(portion).strip(),
+            }
+
+    # Backfill any slot the loop missed with an empty placeholder so
+    # downstream code can rely on 1:1 alignment.
+    for i, zh in enumerate(zh_segments):
+        if rows[i] is None:
+            rows[i] = {"start": zh["start"], "end": zh["end"], "text": ""}
 
     if out_json:
         out_json.write_text(
-            json.dumps({"language": "en", "task": "translate-marian", "segments": rows}, ensure_ascii=False, indent=2)
+            json.dumps({"language": "en", "task": "translate-marian-grouped", "segments": rows, "groups": groups}, ensure_ascii=False, indent=2)
         )
     return rows
 
@@ -350,14 +515,22 @@ def build_pieces(duration, silences, memory=None):
     edit = (memory or {}).get("editing", {})
     opening_trim = float(edit.get("opening_trim_seconds", 0))
     preserve_tail = float(edit.get("preserve_tail_seconds", 0))
+    # Chinese-tuned padding: leave 280ms of audio on each side of every cut
+    # so the syllable tail (Tone 3 dip, -n/-ng nasal release) and the next
+    # syllable's onset are never clipped. Combined with the -42 dB / 0.55s
+    # silencedetect threshold, only pauses longer than ~0.74s actually
+    # produce a cut.
+    cut_head_pad = float(edit.get("cut_head_padding", 0.28))
+    cut_tail_pad = float(edit.get("cut_tail_padding", 0.28))
+    min_cut_len = float(edit.get("min_cut_length", 0.18))
     protected_tail_start = max(0, duration - preserve_tail)
     cuts = []
     for start, end in silences:
         if end >= protected_tail_start:
             continue
-        cut_start = max(0, start + 0.06)
-        cut_end = min(protected_tail_start, end - 0.10)
-        if cut_end - cut_start >= 0.18:
+        cut_start = max(0, start + cut_head_pad)
+        cut_end = min(protected_tail_start, end - cut_tail_pad)
+        if cut_end - cut_start >= min_cut_len:
             cuts.append((cut_start, cut_end))
     pieces = subtract_ranges((0.0, duration), cuts)
     merged = []
@@ -419,6 +592,34 @@ _CJK_RANGE = f"[{_CJK_BLOCKS}]"
 _ASCII_WORD = r"[A-Za-z0-9][A-Za-z0-9/+\-.]*"
 
 
+_FULLWIDTH_HALFWIDTH_MAP = {
+    # Fullwidth digits 0-9 (U+FF10..U+FF19)
+    **{chr(0xFF10 + i): chr(0x30 + i) for i in range(10)},
+    # Fullwidth uppercase A-Z (U+FF21..U+FF3A)
+    **{chr(0xFF21 + i): chr(0x41 + i) for i in range(26)},
+    # Fullwidth lowercase a-z (U+FF41..U+FF5A)
+    **{chr(0xFF41 + i): chr(0x61 + i) for i in range(26)},
+}
+
+
+def fullwidth_to_halfwidth_ascii(text):
+    """Convert fullwidth ASCII letters/digits to their halfwidth equivalents.
+
+    Whisper occasionally emits fullwidth English letters or digits when it
+    interprets them in a CJK context (e.g. "ＡＩ" instead of "AI"). We always
+    want halfwidth for English content -- it's narrower and consistent with
+    the rest of the burnt-in / subtitle pipeline.
+
+    Punctuation is NOT converted: "，" stays Chinese-style inside Chinese
+    text (a fullwidth comma between Chinese characters reads more
+    naturally), but if it sits between ASCII tokens the wrap logic + clean_zh
+    already strip it down.
+    """
+    if not text:
+        return text
+    return "".join(_FULLWIDTH_HALFWIDTH_MAP.get(ch, ch) for ch in text)
+
+
 def normalize_cjk_ascii_spacing(text):
     """Make sure there is always a single space between Chinese and English /
     digit tokens. Punctuation is left untouched.
@@ -428,6 +629,7 @@ def normalize_cjk_ascii_spacing(text):
     """
     if not text:
         return text
+    text = fullwidth_to_halfwidth_ascii(text)
     # ASCII word followed by CJK -> add space.
     text = re.sub(rf"({_ASCII_WORD})({_CJK_RANGE})", r"\1 \2", text)
     # CJK followed by ASCII word -> add space.
@@ -473,24 +675,109 @@ def clean_zh(text):
 
 
 def clean_en(text):
-    return normalize_cjk_ascii_spacing(re.sub(r"\s+", " ", text).strip())
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return text
+    # Safety net for Marian passthrough failures. opus-mt-zh-en sometimes
+    # leaks source CJK characters when it can't translate (short fragments,
+    # rare phrases, mid-clause noun chunks). If more than ~25% of the
+    # non-space characters are CJK, treat the whole EN as untrustworthy
+    # rather than letting "And then 要跟大家講的是 you what" reach the burnt-in
+    # caption.
+    visible = re.sub(r"\s", "", text)
+    if visible:
+        cjk_count = sum(1 for ch in visible if "㐀" <= ch <= "鿿" or "豈" <= ch <= "﫿")
+        if cjk_count / len(visible) > 0.25:
+            return ""
+    text = _dedupe_en_repetition(text)
+    return normalize_cjk_ascii_spacing(text)
+
+
+def _dedupe_en_repetition(text):
+    """Strip Marian's classic repetition pathology that ngram-suppression
+    misses: consecutive identical words ("today today"), case variants
+    ("design Designs"), and immediate phrase echoes ("of the X of the X").
+
+    Applied AFTER Marian output, so it cleans both the no_repeat_ngram_size
+    misses and the post-batch concatenation seams.
+    """
+    if not text:
+        return text
+    # Collapse "word word" (case-insensitive) anywhere on the line.
+    pattern_word = re.compile(r"\b(\w+)(\s+\1\b)+", flags=re.IGNORECASE)
+    prev = None
+    while prev != text:
+        prev = text
+        text = pattern_word.sub(r"\1", text)
+    # Collapse "A B A B" -> "A B" for 2-grams.
+    pattern_bigram = re.compile(r"\b(\w+\s+\w+)\s+\1\b", flags=re.IGNORECASE)
+    prev = None
+    while prev != text:
+        prev = text
+        text = pattern_bigram.sub(r"\1", text)
+    return re.sub(r"\s+", " ", text).strip(" ,;:")
+
+
+_ZH_ASCII_WORD_CHARS = re.compile(r"[A-Za-z0-9/+\-.]")
+_ZH_PUNCT_TOKENS = set(",，.。:：;；!！?？、")
 
 
 def wrap_zh(text, max_width=26):
-    tokens = []
-    for part in text.split():
-        if re.fullmatch(r"[A-Za-z0-9/+\-.]+", part):
-            tokens.append(part)
-        else:
-            tokens.extend(list(part))
+    """Wrap mixed CJK + ASCII text into at most 2 lines.
 
-    def token_width(token):
-        return len(token) + 2 if re.fullmatch(r"[A-Za-z0-9/+\-.]+", token) else 2
+    Tokenizing rules:
+      * An ASCII word run (letters/digits/in-word `/+-.`) becomes ONE token,
+        so "CheckCheck" stays atomic even when adjacent to a comma. Previously
+        text like "OK,CheckCheck" fell through to char-by-char tokenisation
+        (since the comma broke the fullmatch) and produced "CheckC / heck".
+      * Punctuation is its own token so we can wrap around it cleanly.
+      * Each CJK char is its own token.
+    """
+    tokens = []
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if ch.isspace():
+            i += 1
+            continue
+        if _ZH_ASCII_WORD_CHARS.match(ch):
+            j = i
+            while j < n and _ZH_ASCII_WORD_CHARS.match(text[j]):
+                j += 1
+            tokens.append(text[i:j])
+            i = j
+            continue
+        if ch in _ZH_PUNCT_TOKENS:
+            tokens.append(ch)
+            i += 1
+            continue
+        # CJK char or anything else: emit as singleton.
+        tokens.append(ch)
+        i += 1
+
+    def is_ascii_word(tok):
+        return bool(tok) and _ZH_ASCII_WORD_CHARS.match(tok[0]) is not None
+
+    def is_punct(tok):
+        return tok in _ZH_PUNCT_TOKENS
+
+    def token_width(tok):
+        # Each CJK char or fullwidth punct counts as 2; ASCII counts as 1 per
+        # char + 2 leading space when needed -- we'll model the leading space
+        # at append time, here just the body width.
+        if is_ascii_word(tok):
+            return len(tok)
+        return 2
 
     def append_token(line, token):
-        is_ascii = bool(re.fullmatch(r"[A-Za-z0-9/+\-.]+", token))
-        if is_ascii:
-            return (line + " " + token).strip()
+        if is_ascii_word(token):
+            return (line + " " + token).strip() if line else token
+        if is_punct(token):
+            # Glue punctuation to the previous token (no leading space).
+            return line + token
+        # CJK: add a space if the previous char was ASCII so we never end up
+        # with "AI幫忙" or "Reels影片".
         if line and re.search(r"[A-Za-z0-9/+\-.]$", line):
             return line + " " + token
         return line + token
@@ -505,10 +792,32 @@ def wrap_zh(text, max_width=26):
         width += next_width
     if line:
         lines.append(line.strip())
-    return r"\N".join(lines[:2])
+    lines = lines[:2]
+
+    # Widow avoidance: if the wrap puts only 1-3 characters on line 2 (e.g.
+    # the trailing "的" / "了" / "你" that the user keeps catching), pull the
+    # last 2-character chunk from line 1 down so the two lines look balanced
+    # instead of having a lonely tail.
+    if len(lines) == 2 and len(re.sub(r"\s", "", lines[1])) <= 3:
+        head_tokens = list(lines[0])
+        tail = lines[1]
+        # Walk back: grab whole ASCII words or CJK pairs until tail has >= 4
+        # characters (or we'd empty line 1).
+        while len(re.sub(r"\s", "", tail)) <= 3 and len(head_tokens) > 4:
+            ch = head_tokens.pop()
+            tail = (ch + tail).strip()
+        lines = ["".join(head_tokens).strip(), tail]
+    return r"\N".join(lines)
 
 
-def wrap_en(text, width=38):
+def wrap_en(text, width=26, max_lines=1):
+    """Wrap English text by word boundary.
+
+    `max_lines=1` is the production setting (forces single-line EN under
+    bilingual ZH so the two never collide vertically; long EN gets truncated
+    at the last whole word that fits). `max_lines=2` is used for English-only
+    mode where EN can take the full subtitle zone.
+    """
     words = text.split()
     lines, line = [], ""
     for word in words:
@@ -521,7 +830,7 @@ def wrap_en(text, width=38):
             line = candidate
     if line:
         lines.append(line)
-    return r"\N".join(lines[:2])
+    return r"\N".join(lines[:max(1, max_lines)])
 
 
 def plain_wrap_zh(text, max_chars=9):
@@ -533,24 +842,419 @@ def plain_wrap_zh(text, max_chars=9):
 
 
 def segment_hook_score(segment, index=0):
+    """Score a ZH segment as a potential POV / scroll-stop hook.
+
+    Rules derived from creator research (OpusClip 2026 formulas + Chinese
+    short-video community 5-type framework). Each pattern detected adds to
+    the score; position weighting prefers the first 30 seconds because the
+    hook needs to land in the audience's 1.5-second attention window.
+
+    Detected patterns:
+      * Numbered-list hook        e.g. "3 個秘密", "5 招", "10 倍"
+      * Question hook             e.g. "你知道...", "為什麼...?", "有沒有..."
+      * Contrarian / negation     e.g. "其實不是", "別再", "千萬不要", "你以為..."
+      * Mistake confession        e.g. "我浪費了", "後悔", "早知道", "我犯了"
+      * Secret / exclusivity      e.g. "99% 的人", "沒人說", "大部分人不知道", "一個秘密"
+      * Time-promise              e.g. "3 分鐘", "7 天內", "1 小時"
+      * Authority                 e.g. "我做了 X 年", "我花了 X"
+      * Strong emotion / pattern-break  "絕對", "真的", "居然", "完全", "震驚"
+      * Urgency                   "趁早", "趁現在", "再不", "已經太晚"
+
+    The score is a continuous number — higher = better hook material.
+    """
     text = clean_zh(segment.get("text", ""))
-    keywords = [
-        "AI", "自動", "廣告", "小編", "Google", "成本", "省", "免費",
-        "問題", "方法", "怎麼", "為什麼", "其實", "最", "不需要", "可以",
+    if not text:
+        return 0.0
+    start = float(segment.get("start", 0))
+    score = 0.0
+
+    # --- Sentence completeness ---
+    # A hook must feel like a complete thought. If the segment ends with a
+    # dangling modal ("能不能", "可不可以", "要不要") or a continuation cue
+    # ("然後", "所以", "因為"), the speaker hadn't finished -- skip it as a
+    # hook candidate even if it has keywords. This kills selections like
+    # "剪接軟體的第二部影片能不能夠" (which trails off mid-thought).
+    if _segment_looks_complete(text):
+        score += 5
+    else:
+        score -= 8
+
+    # --- Filler / test-content veto ---
+    # Reject openings that are obviously soundcheck or warm-up filler so the
+    # hook scorer never picks "好啦好啦,來快速測試一下" as the POV title.
+    # These patterns dominate the segment if matched at the start OR if the
+    # segment is mostly filler (e.g. "test test", "ok ok").
+    filler_patterns = [
+        r"^(好啦|好的|好|嗯|呃|啊|噢|喔|那個|然後|就是)\s*[,，]?\s*",
+        r"^(let'?s\s+)?(quickly\s+)?test(ing)?\b",
+        r"^(ok|okay|alright)[,，\s]",
+        r"\b(check\s+check|test\s+test|ok\s+ok)\b",
+        r"^(我想|我來|我們來)?\s*(測試|試試|看看)\s*(一下)?$",
     ]
-    score = max(0, 60 - segment.get("start", 0)) * 0.12
-    score += max(0, 26 - len(text)) * 0.12
-    score += sum(4 for word in keywords if word in text)
-    score += 6 if re.search(r"[？?！!]", text) else 0
-    score += 2 if index < 6 else 0
+    if any(re.search(p, text, flags=re.IGNORECASE) for p in filler_patterns):
+        score -= 20  # Hard veto so even early position can't rescue it.
+
+    # --- Position decay: peak in first 6s, falls off after 30s ---
+    if start <= 30:
+        score += max(0.0, (30 - start) * 0.3) + (4 if start <= 6 else 0)
+    # --- Length: ideal 8-22 chars for cover band ---
+    n_chars = len(text)
+    if 8 <= n_chars <= 22:
+        score += 4
+    elif n_chars < 8:
+        score -= (8 - n_chars) * 0.6
+    elif n_chars > 22:
+        score -= (n_chars - 22) * 0.3
+
+    # --- Pattern-based scoring (research-backed) ---
+    # 1. Numbered list — Arabic OR Chinese numerals 一二三四五六七八九十
+    if re.search(r"\b\d{1,2}\s*(?:個|招|件|步|秒|分|天|年|歲|倍|%|％)\b", text):
+        score += 8
+    elif re.search(r"[一二三四五六七八九十]\s*(?:個|招|件|步|大|秒|分|天|年|倍)", text):
+        score += 7
+
+    # 2. Question hook
+    if re.search(r"[？?！!]$", text):
+        score += 6
+    if re.search(r"(?:你知道|為什麼|怎麼|有沒有|可不可以|是不是|哪一|哪個|什麼是|要怎麼)", text):
+        score += 6
+
+    # 3. Contrarian / negation pattern interrupt
+    if re.search(r"(?:其實不|其實沒|別再|千萬不要|不要再|你以為|你可能不知道|錯了|誤會了)", text):
+        score += 7
+    # Early negation in first 5 chars
+    if re.search(r"^(?:不|沒|別|千萬|錯)", text):
+        score += 3
+
+    # 4. Mistake / vulnerability confession
+    if re.search(r"(?:我浪費|我花了|我後悔|早知道|犯了|失敗|教訓|繞了|走了彎路)", text):
+        score += 6
+
+    # 5. Secret / exclusivity
+    if re.search(r"(?:99%|九成|大部分人|大多數人|沒人[會說告訴跟]|沒人講|很少人|一個秘密|不為人知|內行|關鍵在)", text):
+        score += 8
+
+    # 6. Time-promise
+    if re.search(r"(?:\d+|[一二三四五六七八九十])\s*(?:秒|分鐘|小時|天|週|個月|年)(?:內|就|可以|搞定|學會|做完)", text):
+        score += 5
+
+    # 7. Authority — long-form experience claim
+    if re.search(r"(?:我做了|我花了|我玩了|我研究了|我用了)\s*\d+\s*(?:年|個月|天)", text):
+        score += 6
+
+    # 8. Strong emotion / pattern break
+    if re.search(r"(?:絕對|真的超|完全|居然|竟然|震驚|誇張|爆炸|簡直|根本就)", text):
+        score += 3
+
+    # 9. Urgency
+    if re.search(r"(?:趁早|趁現在|再不|已經太晚|錯過就|現在不|錯過)", text):
+        score += 4
+
+    # 10. Topic anchor — keeps the hook on-message for THIS clip
+    topic_keywords = ["AI", "自動", "廣告", "小編", "Reels", "剪輯", "成本", "免費"]
+    score += sum(2 for kw in topic_keywords if kw in text)
+
     return score
 
 
 def best_hook_segment(zh_segments):
+    """Return the highest-scoring segment from the first 24 segments, or
+    None if no segments exist. Convenience wrapper around
+    `ranked_hook_candidates` for callers that only need the top pick.
+    """
+    ranked = ranked_hook_candidates(zh_segments)
+    return ranked[0] if ranked else None
+
+
+def ranked_hook_candidates(zh_segments, top_k=6):
+    """Return the top `top_k` hook candidates sorted by descending score.
+
+    derive_pov_title walks this list until it finds a candidate that ALSO
+    splits cleanly into 2 distinct concepts -- so we don't fall back to a
+    "POV: + sentence" framing just because the single highest-scoring
+    segment was monolithic.
+
+    Also logs the top picks so the user can audit hook selection.
+    """
     if not zh_segments:
-        return None
-    candidates = [(segment_hook_score(seg, index), seg) for index, seg in enumerate(zh_segments[:24])]
-    return max(candidates, key=lambda item: item[0])[1]
+        return []
+    candidates = [(segment_hook_score(seg, index), index, seg) for index, seg in enumerate(zh_segments[:24])]
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    log("  hook candidates (top 3):")
+    for score, index, seg in candidates[:3]:
+        snippet = clean_zh(seg.get("text", ""))[:30]
+        log(f"    [{seg.get('start', 0):.1f}s, #{index}, score={score:.1f}] {snippet!r}")
+    return [seg for _, _, seg in candidates[:top_k]]
+
+
+def _segment_looks_complete(text):
+    """Return True iff the segment ends like a complete thought.
+
+    A hook title MUST be a complete sentence. This is a hard filter in
+    `derive_pov_title` -- segments that fail are skipped entirely, never
+    just penalised. The rules below catch the specific incompletes that
+    keep slipping through (the canonical pathology was
+    "剪接軟體的第二部影片能不能夠" where 能不能夠 trailed off).
+
+    Universal incompleteness signals (applies to every clip, every user):
+
+    1. Reduplicated yes-no modal at end, with or without an optional
+       supporting verb after it:
+         能不能, 能不能夠, 能不能做, 會不會, 會不會去, 要不要,
+         可不可以, 可不可以做, 想不想, 是不是, 有沒有, 好不好, 對不對
+    2. Trailing modal alone (能/會/要/想/可以/應該/必須)
+    3. Trailing connective particle (然後/所以/因為/可是/不過/而且/
+       並且/還有/還是/或者/另外/其實/只是/但是)
+    4. Trailing topic shifter without comment (那個/這個/那麼/這麼/
+       什麼/怎麼/為什麼) -- the speaker hasn't gotten to the point yet
+    5. Trailing subject pronoun without verb (我/你/他/她/我們/...)
+    6. Trailing 的/了 with very short content (likely cut mid-clause)
+    """
+    if not text:
+        return False
+    tail = text.rstrip(" ，,.;: 　")
+    if not tail or len(tail) < 4:
+        return False
+    last = tail[-1]
+
+    # Definitively complete: sentence-final punctuation.
+    if last in "。！？.!?":
+        return True
+
+    # 1. Reduplicated yes-no modal patterns -- the speaker was asking but
+    # didn't finish the question.
+    if re.search(r"(?:能不能|會不會|要不要|想不想|是不是|有沒有|可不可以|好不好|對不對)(?:夠|做|去|來|的|過|了|呢|啊)?$", tail):
+        return False
+
+    # 2. Lone modal verb at end (no object, no closure).
+    if re.search(r"(?:能|會|要|想|可以|應該|必須|可能|可不可以)$", tail):
+        return False
+
+    # 3. Connective at end -- "to be continued" cue.
+    if re.search(r"(?:然後|所以|因為|可是|不過|但是|而且|並且|還有|還是|或者|或是|另外|其實|只是|那麼)$", tail):
+        return False
+
+    # 4. Topic shifter without a comment.
+    if re.search(r"(?:那個|這個|什麼|怎麼|為什麼|哪個|哪裡|哪一)$", tail):
+        return False
+
+    # 5. Subject pronoun trailing.
+    if re.search(r"(?:我|你|他|她|我們|你們|他們|大家|有人)$", tail):
+        return False
+
+    # 6. Lone 的/了 with too little context.
+    if last in "的了" and len(tail) < 8:
+        return False
+
+    # Closing particle -> complete.
+    if last in "嗎吧呢啦哦呦":
+        return True
+    if last == "了" and len(tail) >= 8:
+        return True
+
+    # Default: if it survives all the bad patterns and is long enough,
+    # treat as complete. Burnt-in title only renders 8-18 chars anyway.
+    return len(tail) >= 6
+
+
+def _split_hook_into_two_concepts(text):
+    """Find a natural 2-concept split inside `text`.
+
+    Returns (line_a, line_b) when a clean split exists where BOTH halves
+    read as standalone concepts (4-14 chars each). Returns (text, "") when
+    no good split is found; callers then render a single-line title in a
+    single color rather than fake a 2-concept break.
+
+    Strategies, in priority order:
+      1. Explicit internal punctuation (，。、：)
+      2. Question/contrast pivot ("真的", "其實", "竟然", "可不可以", etc.)
+      3. Topic-comment boundary (after the subject pronoun + 1-2 chars of
+         noun phrase, the verb phrase starts -- split there)
+      4. Particle anchor (split before sentence-final 嗎/呢/吧 with the
+         particle group on line 2)
+    """
+    text = text.strip(" ，。、,.;:")
+    n = len(text)
+    if n < 8:
+        return text, ""
+
+    # 1. Explicit punctuation - the cleanest signal of two clauses.
+    for idx, ch in enumerate(text):
+        if ch in "，。、：,.;:" and 4 <= idx <= n - 5:
+            left = text[:idx].strip(" ，。、,.;:")
+            right = text[idx + 1:].strip(" ，。、,.;:")
+            if 4 <= len(left) <= 14 and 4 <= len(right) <= 14:
+                return left, right
+
+    # 2. Pivot words - the hook turns on these. Line 2 keeps the pivot
+    # because it's what makes the punch land.
+    for pivot in ("真的", "其實", "竟然", "居然", "為什麼", "怎麼", "可不可以",
+                  "能不能", "會不會", "是不是", "完全", "絕對", "原來"):
+        idx = text.find(pivot)
+        if 4 <= idx <= n - 4:
+            left = text[:idx].strip(" ，。、,.;:")
+            right = text[idx:].strip(" ，。、,.;:")
+            if 4 <= len(left) <= 14 and 4 <= len(right) <= 14:
+                return left, right
+
+    # 3. Topic-comment: short subject noun phrase then verb phrase.
+    sub_match = re.match(r"^(我|你|他|她|我們|你們|他們|大家|有人)([^ ，,。.]{1,5})", text)
+    if sub_match:
+        boundary = len(sub_match.group(0))
+        left = text[:boundary].strip()
+        right = text[boundary:].strip()
+        if 4 <= len(left) <= 12 and 4 <= len(right) <= 14:
+            return left, right
+
+    # 4. Balanced break at structural particle (的/了/過/就) closest to mid.
+    target = n // 2
+    best_pos = None
+    best_dist = float("inf")
+    for pos, ch in enumerate(text):
+        if ch in "的了過就" and 4 <= pos + 1 <= n - 4:
+            dist = abs(pos + 1 - target)
+            if dist < best_dist:
+                best_dist = dist
+                best_pos = pos + 1
+    if best_pos is not None:
+        left = text[:best_pos].strip()
+        right = text[best_pos:].strip()
+        if 4 <= len(left) <= 14 and 4 <= len(right) <= 14:
+            return left, right
+
+    return text, ""
+
+
+def _split_hook_into_lead_and_punch(text):
+    """Split a hook sentence into (lead, punch) where:
+      * lead = a short framing label (3-6 chars) that goes on line 1
+      * punch = the actual scroll-stop content that goes on line 2
+    Each line is a distinct concept rendered in a distinct color so the
+    title reads as a "headline 1 / headline 2" pair, not a sentence broken
+    arbitrarily mid-clause.
+
+    Detection rules:
+      1. If the hook contains 「：」/「:」, use what's before as lead
+      2. If the hook starts with a question marker (為什麼/怎麼/有沒有),
+         that becomes the lead, the rest is the punch
+      3. If the hook starts with a numbered claim ("3 個秘密"), the number
+         phrase is the lead, the rest is the punch
+      4. If the hook starts with first-person observation (我/你發現/...),
+         "POV：" becomes the lead, the hook becomes the punch
+      5. Default: "POV：" + the whole hook as punch
+    """
+    text = text.strip()
+    # Rule 1: explicit colon
+    for sep in ("：", ":"):
+        if sep in text:
+            lead, _, punch = text.partition(sep)
+            lead = lead.strip()
+            punch = punch.strip()
+            if 1 <= len(lead) <= 8 and punch:
+                return (lead + sep), punch
+
+    # Rule 2: question-form opening
+    q_match = re.match(r"^(為什麼|怎麼|有沒有|是不是|你知道|你以為|哪一[個種件])", text)
+    if q_match:
+        lead = q_match.group(0)
+        punch = text[len(lead):].lstrip(" ，,：:")
+        if punch:
+            return f"{lead}？", punch
+
+    # Rule 3: number opening
+    n_match = re.match(r"^(\d{1,2}\s*(?:個|招|件|步|大|秒|分|天|年|倍|%|％)|[一二三四五六七八九十]\s*(?:個|招|件|步|大))", text)
+    if n_match:
+        lead = n_match.group(0).strip()
+        punch = text[len(n_match.group(0)):].lstrip(" ，,：:、")
+        if punch:
+            return lead, punch
+
+    # Rule 4: first-person POV
+    if re.match(r"^[我你他她我們你們]", text):
+        return "POV：", text
+
+    # Default: POV framing
+    return "POV：", text
+
+
+def _english_lead_for(zh_lead):
+    """Pick an English equivalent lead label that pairs with the ZH lead."""
+    if zh_lead in ("POV：", "POV:"):
+        return "POV:"
+    if "？" in zh_lead or "?" in zh_lead:
+        return "Why:"
+    if re.match(r"^\d", zh_lead):
+        return zh_lead  # numbers translate as-is
+    return "POV:"
+
+
+def derive_pov_title(zh_segments, en_segments, fallback_zh, fallback_en):
+    """Pick the best hook from the transcript and shape it into a 2-line
+    burnt-in title. Returns (zh_title, en_title) where each title is a
+    string formatted as "{line_1}|{line_2}" so the renderer can paint
+    line 1 and line 2 in DIFFERENT colors (white intro + accent punch)
+    -- they're two separate concepts, not one sentence split by chance.
+
+    Shaping rules:
+      * Line 1 = a short framing label ("POV：", "為什麼？", "重點是")
+        in the cover's main_color
+      * Line 2 = the actual scroll-stop content in accent_color
+      * If no clear hook scores high enough, falls back to the static title.
+    """
+    if not zh_segments:
+        return fallback_zh, fallback_en
+    # Universal title rules (REGRESSION_CHECKLIST.md):
+    #   - Title must be 2 lines in 2 different colors
+    #   - Both lines must be complete content (no label-only line)
+    #   - Picker MUST try the next candidate when the top one is monolithic
+    candidates = ranked_hook_candidates(zh_segments, top_k=8)
+    chosen_hook = None
+    chosen_split = (None, None)
+    for candidate in candidates:
+        text = clean_zh(candidate.get("text", "")).strip(" ，。、,.;:")
+        # HARD GATE 1: must be a complete sentence. No "能不能夠..." trailing.
+        if not _segment_looks_complete(text):
+            continue
+        # HARD GATE 2: must score above the filler floor.
+        score = segment_hook_score(candidate, 0)
+        if score < 6:
+            continue
+        # HARD GATE 3: must split cleanly into TWO independent concepts.
+        a, b = _split_hook_into_two_concepts(text)
+        if not b:
+            continue
+        chosen_hook = candidate
+        chosen_split = (a, b)
+        break
+
+    if chosen_hook is None or not chosen_split[1]:
+        # No candidate produced a 2-concept hook. Don't fake one with a
+        # POV: label; fall through to the static memory title which the
+        # designer already shaped as 2 lines via the "：" split rule.
+        return fallback_zh, fallback_en
+
+    line_a, line_b = chosen_split
+    zh = f"{line_a}|{line_b}"
+
+    # English side mirrors the 2-line shape so the same color rule applies.
+    en_full = nearest_english_segment(en_segments, (chosen_hook["start"] + chosen_hook["end"]) / 2).strip(" ,;:")
+    if not en_full:
+        en = fallback_en
+    else:
+        # Pair the EN by sentence-mid comma if present; otherwise balance
+        # the EN words across two lines.
+        comma_idx = en_full.find(",")
+        if 4 <= comma_idx <= len(en_full) - 4:
+            en = f"{en_full[:comma_idx].strip()}|{en_full[comma_idx + 1:].strip()}"
+        else:
+            words = en_full.split()
+            mid = max(1, len(words) // 2)
+            en = f"{' '.join(words[:mid])}|{' '.join(words[mid:])}"
+        # Cap each EN line to ~20 chars so it fits the band
+        en_parts = [p[:20] for p in en.split("|")]
+        en = "|".join(en_parts)
+
+    return zh, en
 
 
 def nearest_english_segment(en_segments, target):
@@ -762,6 +1466,25 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     timeline_end = timeline[-1]["dst_end"] if timeline else 0
     bilingual = bool(sub.get("bilingual")) and not en_only
     en_assignments = _build_en_assignments(zh_segments, en_segments) if (bilingual or en_only) else [""] * len(zh_segments)
+
+    # Write a verification transcript: source timestamps + ZH + EN side by
+    # side. The GUI uses this to render a scrollable, click-to-seek table
+    # under the output video so users can audit cuts and translations on
+    # their own uploads without needing a video editor.
+    transcript_combined = []
+    for zh_index, zh in enumerate(zh_segments):
+        for item in intersections(zh, timeline):
+            transcript_combined.append({
+                "start": round(item["start"], 2),
+                "end": round(item["end"], 2),
+                "zh": clean_zh(item["text"]),
+                "en": clean_en(en_assignments[zh_index]) if zh_index < len(en_assignments) else "",
+            })
+    transcript_combined.sort(key=lambda r: r["start"])
+    combined_path = ass_path.parent / "transcript_combined.json"
+    combined_path.write_text(json.dumps(
+        {"segments": transcript_combined}, ensure_ascii=False, indent=2,
+    ))
     for zh_index, zh in enumerate(zh_segments):
         en_text = en_assignments[zh_index] if zh_index < len(en_assignments) else ""
         for item in intersections(zh, timeline):
@@ -772,7 +1495,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 if not en_text:
                     continue
                 en_clean_raw = clean_en(en_text)
-                en_text_wrapped = ass_escape(wrap_en(en_clean_raw, width=22))
+                # English-only mode: EN is the hero, allow up to 2 lines.
+                en_text_wrapped = ass_escape(wrap_en(en_clean_raw, width=22, max_lines=2))
                 if not en_text_wrapped:
                     continue
                 normalized = re.sub(r"\s+", "", en_text_wrapped.replace(r"\N", "").lower())
@@ -792,21 +1516,33 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     rows[-1]["end"] = max(rows[-1]["end"], end)
                     last_end = max(last_end, end)
                     continue
-                en_clean = ass_escape(wrap_en(en_text)) if (bilingual and en_text) else ""
+                # Bilingual mode: ZH owns the upper band (1-2 lines), EN sits
+                # below in its own band (1-2 lines). The vertical margins are
+                # chosen (in reels_memory.json + _verify_subtitle_layout) so
+                # that even ZH 2-line + EN 2-line maintains a clear gap.
+                # We DO NOT truncate EN -- translation completeness matters
+                # more than width.
+                en_clean = ass_escape(wrap_en(en_text, width=26, max_lines=2)) if (bilingual and en_text) else ""
                 rows.append({"start": start, "end": end, "zh": zh_text, "en": en_clean})
                 last_zh_norm, last_end = normalized, end
 
-    # No-overlap rule: clip each row's end so the next row's lead-in never
-    # collides with it.
+    # ABSOLUTE no-overlap rule: clip each row's end so the next row's lead-in
+    # never collides with it. No 0.35s floor -- if rows are so tightly packed
+    # that clipping would make them invisible, we just drop them. The user's
+    # requirement that subtitles NEVER overlap takes priority over keeping
+    # short rows on screen.
     rows.sort(key=lambda r: r["start"])
     min_gap = float(sub.get("min_gap_seconds", 0.04))
     for index in range(len(rows) - 1):
         next_start = rows[index + 1]["start"]
         latest_end = next_start - min_gap
         if rows[index]["end"] > latest_end:
-            rows[index]["end"] = max(rows[index]["start"] + 0.35, latest_end)
+            rows[index]["end"] = latest_end
+    # Drop rows that became invisible (clip ate them).
+    rows = [r for r in rows if r["end"] - r["start"] > 0.05]
 
     lines = [header]
+    all_events = []
     for row in sorted(rows, key=lambda r: r["start"]):
         dialogue_rows = []
         if row.get("zh"):
@@ -818,10 +1554,69 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 "EN", 1 if en_only else 0, row["start"], row["end"], row["en"], en_base_margin, en_size, max(10, line_gap - 4),
             ))
         for layer, start, end, style_name, margin_v, text in dialogue_rows:
+            all_events.append((style_name, start, end, margin_v))
             lines.append(
                 f"Dialogue: {layer},{ass_ts(start)},{ass_ts(end)},{style_name},,0,0,{margin_v},,{text}\n"
             )
     ass_path.write_text("".join(lines))
+
+    # Production-grade layout assertion. ALWAYS run -- any collision raises
+    # so the job fails loudly with a clear log instead of shipping a bad
+    # video to the user. See _verify_subtitle_layout() for the rules.
+    _verify_subtitle_layout(all_events, zh_size, en_size, en_only=en_only)
+
+
+def _verify_subtitle_layout(events, zh_size, en_size, en_only=False):
+    """Assert subtitle invariants on the produced ASS event list. Raises
+    ValueError on any violation so the pipeline fails fast.
+
+    events: list of (style_name, start_seconds, end_seconds, margin_v)
+
+    Invariants:
+      (a) No two events with the SAME style and DIFFERENT margin_v overlap
+          in time UNLESS they share start/end (those are the intentional
+          two-line wrap pair).
+      (b) For any moment where a ZH event is active and an EN event is also
+          active, their text pixel rectangles must not intersect.
+
+    Pixel math (ASS PlayResY=1920, MarginV measured from bottom, default
+    bottom-center alignment so text baseline is at PlayResY - margin_v):
+      text body y_top    = PlayResY - margin_v - font_size
+      text body y_bottom = PlayResY - margin_v
+      We pad +/-4 px for outline+shadow on each side.
+    """
+    if not events:
+        return
+    PADDING = 5  # outline + shadow safety
+    PLAY_Y = 1920
+
+    def body(margin_v, font_size):
+        y_bottom = PLAY_Y - margin_v
+        y_top = y_bottom - font_size
+        return (y_top - PADDING, y_bottom + PADDING)
+
+    def rects_overlap(a, b):
+        return not (a[1] <= b[0] or b[1] <= a[0])
+
+    # (b) ZH vs EN pixel collision
+    zh_events = [(s, e, body(mv, zh_size)) for st, s, e, mv in events if st == "ZH"]
+    en_events = [(s, e, body(mv, en_size)) for st, s, e, mv in events if st == "EN"]
+    for zh_s, zh_e, zh_rect in zh_events:
+        for en_s, en_e, en_rect in en_events:
+            if en_s >= zh_e or zh_s >= en_e:
+                continue  # no time overlap
+            if rects_overlap(zh_rect, en_rect):
+                raise ValueError(
+                    f"Subtitle layout violation: ZH y={zh_rect} and "
+                    f"EN y={en_rect} overlap at time [{max(zh_s, en_s):.2f}, "
+                    f"{min(zh_e, en_e):.2f}]. Adjust english_bottom_margin "
+                    f"in reels_memory.json."
+                )
+
+    if en_only:
+        return  # ZH style not used in EN-only mode
+
+    log(f"  layout OK: {len(zh_events)} ZH events, {len(en_events)} EN events, no pixel overlap")
 
 
 def _ffmpeg_text_escape(text):
@@ -834,27 +1629,86 @@ def _ffmpeg_text_escape(text):
     )
 
 
-def _title_lines(title):
-    # Render the title as up to two cleanly-spaced lines. Drawing line breaks
-    # via "\n" inside drawtext text= is unreliable across ffmpeg versions and
-    # was previously rendering the literal letter "n".
-    normalized = normalize_cjk_ascii_spacing(title)
-    if " 小編" in normalized:
-        head, tail = normalized.split(" 小編", 1)
-        return [head.strip(), ("小編" + tail).strip()]
-    if "：" in normalized:
-        head, tail = normalized.split("：", 1)
-        return [(head + "：").strip(), tail.strip()]
-    if ":" in normalized:
-        head, tail = normalized.split(":", 1)
-        return [(head + ":").strip(), tail.strip()]
-    return [normalized.strip()]
+def _title_lines(title, max_per_line=12):
+    """Split a ZH title into up to two visually balanced lines so it never
+    overflows the band horizontally. `max_per_line` is in CJK-char widths
+    (a CJK char counts 2, an ASCII char counts 1). The band at fontsize=46
+    in a 1080-wide ASS canvas fits ~12 CJK chars comfortably.
+
+    Strategy, in order of preference:
+      0. Honor an explicit `|` separator inserted by derive_pov_title --
+         this signals "these are TWO distinct concepts" and must be split
+         exactly there so colors render line 1 vs line 2 properly.
+      1. Honor a hard split point in the user's text (`：`, `:`, ` 小編`)
+      2. Split at a natural CJK punctuation (`，` `,` `。`)
+      3. Greedy CJK-aware word-balance split
+    """
+    # 0. Explicit two-concept marker from derive_pov_title.
+    if "|" in title:
+        parts = [normalize_cjk_ascii_spacing(p).strip() for p in title.split("|", 1)]
+        parts = [p for p in parts if p]
+        if len(parts) == 2:
+            return parts
+        if len(parts) == 1:
+            return [parts[0]]
+
+    normalized = normalize_cjk_ascii_spacing(title).strip()
+
+    def cjk_width(s):
+        return sum(2 if re.match(r"[　-〿一-鿿＀-￯]", c) else 1 for c in s)
+
+    # 1. Honor hard split points the user (or hook generator) inserted.
+    for sep, keep in [(" 小編", "after"), ("：", "before"), (":", "before")]:
+        if sep in normalized:
+            head, tail = normalized.split(sep, 1)
+            if keep == "before":
+                return [(head + sep).strip(), tail.strip()]
+            return [head.strip(), (sep.strip() + tail).strip()]
+
+    # 2. If short enough, single line.
+    if cjk_width(normalized) <= max_per_line * 2:
+        return [normalized]
+
+    # 3. Try natural punctuation breaks first.
+    for sep in ["，", ",", "。"]:
+        if sep in normalized:
+            idx = normalized.find(sep)
+            head, tail = normalized[: idx + len(sep)], normalized[idx + len(sep):]
+            if 4 <= cjk_width(head) <= max_per_line * 2 and tail.strip():
+                return [head.strip(), tail.strip()]
+
+    # 4. Greedy balance: find the split that puts both lines closest to
+    # equal width without exceeding max_per_line.
+    total = cjk_width(normalized)
+    target = total // 2
+    cum = 0
+    best_split = None
+    best_delta = float("inf")
+    for i, ch in enumerate(normalized):
+        cum += 2 if re.match(r"[　-〿一-鿿＀-￯]", ch) else 1
+        # Prefer splitting after a non-ASCII boundary (don't split English words)
+        next_ch = normalized[i + 1] if i + 1 < len(normalized) else " "
+        if not re.match(r"[A-Za-z0-9]", ch) or not re.match(r"[A-Za-z0-9]", next_ch):
+            delta = abs(cum - target)
+            line2_width = total - cum
+            if cum <= max_per_line * 2 and line2_width <= max_per_line * 2 and delta < best_delta:
+                best_delta = delta
+                best_split = i + 1
+    if best_split is None:
+        # Hard cut as last resort
+        best_split = next((i for i in range(1, len(normalized)) if cjk_width(normalized[:i]) >= max_per_line * 2), len(normalized) // 2)
+    return [normalized[:best_split].strip(), normalized[best_split:].strip()]
 
 
 def _en_title_lines(title):
     """Split an English title into one or two visually balanced lines."""
     if not title:
         return [""]
+    # Two-concept marker from derive_pov_title.
+    if "|" in title:
+        parts = [p.strip() for p in title.split("|", 1) if p.strip()]
+        if parts:
+            return parts
     if ":" in title:
         head, tail = title.split(":", 1)
         return [(head + ":").strip(), tail.strip()]
@@ -888,8 +1742,15 @@ def build_filter(video, pieces, ass_path, filter_path, memory):
     if language == "en":
         en_title = memory.get("title_en") or memory.get("title", "")
         title_lines = _en_title_lines(en_title)
+        title_source = en_title
     else:
         title_lines = _title_lines(memory["title"])
+        title_source = memory["title"]
+    # Universal rule: title is ALWAYS 2 lines in 2 different colors.
+    # derive_pov_title guarantees a `|` split by walking ranked candidates
+    # and only falling back to the static memory title when NO candidate
+    # produces a clean 2-concept hook. The static title has its own
+    # natural split (via "：") so 2-color always applies.
     title_draws = []
     # Top translucent band keeps the burnt-in title readable on any background.
     title_draws.append(
@@ -1008,6 +1869,26 @@ def text_width(draw, text, font, stroke_width=0):
 def draw_centered(draw, text, y, font, fill, stroke_width=4):
     x = (720 - text_width(draw, text, font, stroke_width)) / 2
     draw.text((x, y), text, font=font, fill=fill, stroke_width=stroke_width, stroke_fill=(0, 0, 0))
+
+
+def fit_font_to_width(draw, text, font_path, base_size, max_width=640, stroke_width=4, min_size=42):
+    """Shrink font from `base_size` toward `min_size` until the rendered
+    text width fits inside `max_width` pixels. Returns the chosen ImageFont.
+
+    Used by cover renderers (especially the Color Pop / centered_hero
+    layout) so a hook like "全自動化 AI 小編跟廣告" or a long English
+    headline never bleeds past the 720 px canvas edge. We leave 40 px of
+    horizontal safe area on each side by default (max_width=640).
+    """
+    if not text:
+        return ImageFont.truetype(font_path, base_size)
+    size = base_size
+    while size > min_size:
+        font = ImageFont.truetype(font_path, size)
+        if text_width(draw, text, font, stroke_width) <= max_width:
+            return font
+        size -= 2
+    return ImageFont.truetype(font_path, min_size)
 
 
 def frame_quality(path):
@@ -1194,17 +2075,18 @@ COVER_STYLES = {
             "line_height": 72,
             "fontsize": 46,
             "main_color": "white",
-            "accent_color": "0x3CE65A",       # auto-caption neon green
+            "accent_color": "white",          # all-white style: NO neon accent
             "borderw": 5,
             "border_alpha": 0.85,
         },
         "subtitle": {
-            # Pure white ZH with a near-invisible black outline — the user's
-            # explicit request: white captions, very thin border for legibility.
+            # "全白爆點" / All-White Hook -- the cover is pure white type, so
+            # the burnt-in title and BOTH subtitle tracks stay pure white too
+            # to keep the visual identity consistent across cover + video.
             "zh_primary": "&H00FFFFFF",
             "zh_outline": "&H50000000",
-            "en_primary": "&H003CE65A",       # auto-caption green
-            "en_outline": "&H80000000",
+            "en_primary": "&H00FFFFFF",
+            "en_outline": "&H50000000",
         },
     },
 
@@ -1380,13 +2262,25 @@ def _render_centered_hero(im, spec, cover, language):
     # headline from going wider than the cover.
 
     if language == "en":
-        size = spec["fonts"].get("big_en") or spec["fonts"]["big"]
-        big_font = ImageFont.truetype(FONT_EN, size)
+        base_size = spec["fonts"].get("big_en") or spec["fonts"]["big"]
+        font_path = FONT_EN
     else:
-        big_font = ImageFont.truetype(FONT_ZH, spec["fonts"]["big"])
+        base_size = spec["fonts"]["big"]
+        font_path = FONT_ZH
     ys = spec["ys"]
     colors = spec["colors"]
     stroke = spec["stroke"]
+
+    # Auto-fit BOTH lines to the same shrunk size so they look like a unit.
+    # 640 px keeps a 40 px safe margin on each side of the 720 px canvas so
+    # bold strokes never bleed off the edge.
+    fitted_size = base_size
+    for candidate in (main_1, main_2):
+        if not candidate:
+            continue
+        font = fit_font_to_width(draw, candidate, font_path, fitted_size, max_width=640, stroke_width=stroke["main"], min_size=46)
+        fitted_size = min(fitted_size, font.size)
+    big_font = ImageFont.truetype(font_path, fitted_size)
 
     if main_1:
         draw_centered(draw, main_1, ys["main_1"], big_font, colors["main_1"], stroke["main"])
@@ -1429,17 +2323,33 @@ def process_video(source, job_dir, options_path=None):
     detect_silence(input_video, silence_log, memory, job_dir)
     model = load_whisper(memory, job_dir)
     zh_segments = transcribe(model, memory, wav, zh_json, "transcribe", job_dir)
-    # We DO NOT run Whisper a second time for the EN pass. Instead we feed
-    # each ZH segment through a dedicated CT2-quantised Marian opus-mt-zh-en
-    # model -- ~50-100x faster than Whisper translate and gives 1:1 timing
-    # alignment for free. The translator is bundled into the .app at build
-    # time; first call into load_translator() is the only setup needed.
+    # ZH -> EN translation: we tested Marian opus-mt-zh-en (fast but produces
+    # gibberish on conversational talking-head Chinese -- "如果是中文版本的話"
+    # came out as "Arabic, but if Chinese...") and NLLB-200-600M (better but
+    # still drops key words). Whisper-medium with task='translate' is the
+    # only thing that produces actually-readable English at acceptable cost
+    # (~98s for 3-min audio on Apple Silicon, since Whisper was pre-trained
+    # on subtitled video data exactly like this).
+    #
+    # On Intel/Windows (no MLX) the bundled Marian model is the fallback.
     if memory["subtitle"]["bilingual"]:
-        translator_bundle = load_translator(memory, job_dir)
-        en_segments = translate_zh_to_en(translator_bundle, zh_segments, en_json, job_dir)
+        en_segments = produce_en_segments(memory, wav, zh_segments, en_json, job_dir)
     else:
         en_segments = []
     write_progress(job_dir, "render", "正在 digest 內容，挑選 hook 與封面文案")
+    # Pick a content-aware POV title from the actual transcript using the
+    # research-backed hook scorer (see segment_hook_score). The default
+    # static title in reels_memory.json is the fallback if nothing scores
+    # high enough -- we don't want to invent a hook that isn't really there.
+    dynamic_zh, dynamic_en = derive_pov_title(
+        zh_segments, en_segments,
+        memory.get("title", "POV"),
+        memory.get("title_en", "POV"),
+    )
+    if dynamic_zh != memory.get("title"):
+        log(f"  hook title: {memory.get('title', '')!r} -> {dynamic_zh!r}")
+    memory["title"] = dynamic_zh
+    memory["title_en"] = dynamic_en
     cover_copy, hook_segment = build_cover_copy(memory, zh_segments, en_segments)
     log("4/7 Building edit timeline and subtitles")
     duration = ffprobe_duration(input_video)
@@ -1485,6 +2395,124 @@ def process_video(source, job_dir, options_path=None):
     write_progress(job_dir, "done", "影片與封面都完成了")
     log("7/7 Done")
     return metadata
+
+
+def re_render_with_edited_captions(job_dir, edits):
+    """Re-render an existing finished job using user-edited caption text.
+
+    `edits` is a list of {"start", "end", "zh", "en"} dicts. The keys
+    `start` (float seconds) match against transcript_combined.json segment
+    starts; matched segments have their ZH and EN text replaced before
+    `build_ass` + `build_filter` + `render_video` re-run. Segments with
+    empty ZH text after editing are dropped from the output (treat as
+    "this isn't real speech").
+
+    The original silence detection, hook/cover decisions, and timeline
+    stay frozen so this round-trip ONLY changes the captions and the
+    burnt-in video. Time cost ~30s (the videotoolbox re-encode).
+
+    Returns the freshly-written result.json dict.
+    """
+    job_dir = Path(job_dir)
+    result_path = job_dir / "result.json"
+    if not result_path.exists():
+        raise ValueError("result.json missing -- job not finished yet")
+
+    result = json.loads(result_path.read_text())
+    memory = result.get("memory") or load_memory(None)
+
+    zh_json = job_dir / "transcript_zh.json"
+    en_json = job_dir / "transcript_en.json"
+    silence_log = job_dir / "silence.log"
+    ass_path = job_dir / "subtitles.ass"
+    filter_path = job_dir / "filter.txt"
+    input_video = next(job_dir.glob("input.*"), None)
+    output = job_dir / "reels_ig_compressed.mp4"
+
+    if input_video is None or not zh_json.exists() or not silence_log.exists():
+        raise ValueError("required pipeline inputs missing -- cannot re-render")
+
+    zh_segments = json.loads(zh_json.read_text()).get("segments", [])
+
+    # Apply user edits keyed by segment start (rounded to 0.01s so the JS
+    # side can echo the same value back without float-comparison drama).
+    edit_map = {}
+    for edit in edits or []:
+        if not isinstance(edit, dict):
+            continue
+        try:
+            key = round(float(edit.get("start", -1)), 2)
+        except (TypeError, ValueError):
+            continue
+        edit_map[key] = edit
+
+    edited_zh = []
+    edited_en_per_zh = []
+    for seg in zh_segments:
+        key = round(float(seg.get("start", 0)), 2)
+        edit = edit_map.get(key)
+        if edit is not None:
+            zh_text = (edit.get("zh") or "").strip()
+            en_text = (edit.get("en") or "").strip()
+            if not zh_text:
+                # User cleared the line -- drop it.
+                continue
+            seg = {**seg, "text": zh_text}
+            edited_en_per_zh.append({
+                "start": seg["start"], "end": seg["end"], "text": en_text,
+            })
+        else:
+            edited_en_per_zh.append(None)
+        edited_zh.append(seg)
+
+    # Build en_segments: prefer user-edited rows; fall back to original where
+    # the user didn't touch it.
+    original_en = json.loads(en_json.read_text()).get("segments", []) if en_json.exists() else []
+    en_segments = []
+    en_cursor = 0
+    for index, override in enumerate(edited_en_per_zh):
+        if override is not None:
+            if override["text"]:
+                en_segments.append(override)
+            # else: user cleared the EN field, leave it empty
+            continue
+        # Find the original EN that overlaps this ZH segment by midpoint.
+        zh = edited_zh[index]
+        mid = (zh["start"] + zh["end"]) / 2
+        nearest = min(original_en, key=lambda s: abs(((s["start"] + s["end"]) / 2) - mid)) if original_en else None
+        if nearest and abs(((nearest["start"] + nearest["end"]) / 2) - mid) < 4:
+            en_segments.append(nearest)
+
+    # Recompute the timeline + render chain. Hook / cover stay frozen.
+    duration = ffprobe_duration(input_video)
+    pieces = build_pieces(duration, parse_silences(silence_log), memory)
+    timeline = make_timeline(pieces)
+    runtime_style = memory.get("runtime_options", {}).get("cover_style", memory["cover"].get("default_style", "editorial"))
+    runtime_lang = memory.get("runtime_options", {}).get("language", "zh")
+
+    log(f"Re-rendering job {job_dir.name} with {len(edited_zh)} edited segments")
+    build_ass(edited_zh, en_segments, timeline, ass_path, memory, cover_style=runtime_style, language=runtime_lang)
+    build_filter(input_video, pieces, ass_path, filter_path, memory)
+    render_video(input_video, filter_path, output, memory)
+
+    # Refresh transcript_combined.json so the GUI's verification panel
+    # picks up the new text on reload.
+    combined = []
+    en_by_start = {round(float(s["start"]), 2): s for s in en_segments}
+    for seg in edited_zh:
+        key = round(float(seg["start"]), 2)
+        en = en_by_start.get(key, {})
+        combined.append({
+            "start": round(float(seg["start"]), 2),
+            "end": round(float(seg["end"]), 2),
+            "zh": clean_zh(seg.get("text", "")),
+            "en": clean_en(en.get("text", "")) if en else "",
+        })
+    (job_dir / "transcript_combined.json").write_text(
+        json.dumps({"segments": combined}, ensure_ascii=False, indent=2)
+    )
+
+    return result
 
 
 def main():

@@ -59,8 +59,13 @@ if sys.platform == "darwin":
     try:
         hiddenimports += collect_submodules("mlx_whisper")
         hiddenimports += collect_submodules("mlx")
+        # mlx_whisper.timing imports scipy.signal -- without these explicitly
+        # listed, PyInstaller silently misses scipy and the runtime falls
+        # back to faster-whisper CPU (killing the 1-min budget).
+        hiddenimports += collect_submodules("scipy")
         datas += collect_data_files("mlx_whisper")
         datas += collect_data_files("mlx")  # picks up mlx.metallib
+        datas += collect_data_files("scipy")
         import mlx as _mlx_pkg
         _mlx_lib_dir = Path(_mlx_pkg.__file__).parent / "lib"
         if _mlx_lib_dir.is_dir():
@@ -79,7 +84,12 @@ a = Analysis(
     hookspath=[],
     runtime_hooks=[],
     excludes=[
-        "matplotlib", "scipy", "pandas", "tkinter", "test", "unittest",
+        # NOTE: scipy / unittest / test stay IN the bundle -- they get
+        # imported transitively by mlx_whisper.timing -> scipy.signal ->
+        # scipy._lib.array_api_compat which uses unittest at module load.
+        # Dropping any of them silently kicks us onto the faster-whisper CPU
+        # fallback (which kills our 1-min budget).
+        "matplotlib", "pandas", "tkinter",
         "PyQt5", "PyQt6", "PySide2", "PySide6",  # GUI toolkits we don't use
         "IPython", "jupyter_client", "jupyter_core", "notebook",
         "sphinx", "pytest", "pip", "setuptools",  # dev tools

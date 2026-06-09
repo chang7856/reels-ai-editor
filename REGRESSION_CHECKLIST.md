@@ -1,0 +1,104 @@
+# Regression Checklist
+
+Run this before declaring any build "ready for the user to test".
+
+Date last passed end-to-end: _(none)_
+
+## Universal title / hook rules (apply to ALL uploads, no exceptions)
+
+- [ ] Burnt-in title renders as 2 lines
+- [ ] Line 1 and Line 2 are PAINTED IN DIFFERENT COLORS
+- [ ] BOTH lines are complete content phrases (no "POV：" label-only line)
+- [ ] Hook scorer NEVER picks a segment that ends with a dangling cue
+      (能不能/可不可以/還是/然後/所以/因為/可是/不過/而且)
+- [ ] Hook scorer NEVER picks a filler opener
+      (好啦/嗯/啊/呃/OK/test/check)
+- [ ] If top hook candidate can't be split into 2 concepts, the picker
+      tries the NEXT best candidate, not "give up + use POV: label"
+- [ ] Title fits within the cover band horizontally at base fontsize;
+      auto-shrinks when too wide
+
+## Cover styles
+
+- [ ] Only `editorial` + `hook_caption` show in the GUI
+- [ ] `magazine_pop` / `繽紛大字` is NOT in the radio group
+- [ ] `magazine_pop` is NOT in STYLE_SWITCHER_ORDER
+- [ ] `magazine_pop` is NOT in server ALLOWED_COVER_STYLES
+- [ ] Hook Caption (全白爆點) title accent and EN subtitle are pure white,
+      no neon green leaking through
+
+## Subtitles (universal, every upload)
+
+- [ ] ZH and EN subtitles NEVER overlap pixel-wise (hard assertion
+      `_verify_subtitle_layout` raises a clear error if any pair would)
+- [ ] EN can wrap to 2 lines without colliding with ZH 2-line case
+- [ ] No mid-word ASCII split (e.g. "OK,CheckCheck" stays atomic
+      across the comma — `_ZH_PUNCT_TOKENS` handling)
+- [ ] Fullwidth ASCII (ＡＩ, ０-９) auto-converts to halfwidth via
+      `fullwidth_to_halfwidth_ascii`
+- [ ] No 1-3 char widow on line 2 of wrap_zh
+- [ ] Silence cuts only fire on pauses > 0.74s with 280 ms padding on
+      each side (Chinese-tuned)
+
+## Editable transcript
+
+- [ ] Transcript table loads after the job completes
+- [ ] Each row: timestamp button + editable ZH cell + editable EN cell
+- [ ] Click timestamp → video seeks to that moment
+- [ ] Editing a cell marks it dirty (yellow highlight)
+- [ ] "套用字幕修改" button posts to /jobs/<id>/captions
+- [ ] During re-burn, ALL other result-panel buttons become disabled
+- [ ] After re-burn, video src refreshes to new URL
+
+## Language switching (the bug that keeps coming back)
+
+- [ ] Upload a video on ZH → result shown → switch to EN
+- [ ] On EN: result panel cleared (no leaked ZH state)
+- [ ] No "找不到這個任務" flash
+- [ ] No fake 8%/100% progress bars on the EN landing
+- [ ] Switch back to ZH → ZH result RESTORES (video + cover + transcript)
+- [ ] localStorage key `reels.session.zh` persists across switches
+- [ ] localStorage key `reels.session.en` is independent
+- [ ] If the ZH job's job_dir was wiped (15-min cleanup or rebuild),
+      restoreSession silently falls back to empty UI (no error flash)
+- [ ] activePollToken sentinel: cancelled polls never paint stale state
+
+## UI safety
+
+- [ ] Top dropzone clickable when result is showing → auto-resets first
+- [ ] Drag-and-drop same file after completion still triggers upload
+      (Safari quirk handled with `type` swap)
+- [ ] Double-clicking the .app icon while it's running does NOT open a
+      new browser tab (silent exit on port-already-in-use)
+- [ ] Open Video / Open Cover buttons open in new tab (`target="_blank"`)
+- [ ] "再剪一支影片" button resets the panel and scrolls to dropzone
+- [ ] restoreActiveJob on page load: PROBES /jobs/<id> first, only
+      paints "processing" UI if the job is genuinely still running
+- [ ] Background colors / progress bars never appear without a real
+      in-flight upload
+
+## Speed budget (3-min input on M-chip Mac)
+
+- [ ] Whisper-medium MLX translate: ~80s
+- [ ] h264_videotoolbox encode: ~30s
+- [ ] Total wall time: ~135-180s
+- [ ] First-time model download: ~1.5 GB (warning shown to user)
+
+## Build hygiene
+
+- [ ] `node -e ...` JS template literal lint passes (no broken
+      backticks inside HTML comments)
+- [ ] Layout assertion `layout OK: NN ZH events, MM EN events,
+      no pixel overlap` appears in every job's run.log
+- [ ] `hook candidates (top 3):` lines appear in run.log for audit
+- [ ] `hook title:` line shows the FINAL title actually rendered
+
+## Smoke-test command
+
+```bash
+cd /Users/taofangchang/Documents/Codex/2026-05-24/https-www-instagram-com-realskytan-1 && \
+  PYTHON=$(pwd)/.venv-arm64/bin/python bash scripts/smoke_test.sh
+```
+
+(See `scripts/smoke_test.sh` — runs synthetic clip through pipeline +
+greps for required log lines + diffs served HTML vs source.)

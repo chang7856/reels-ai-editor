@@ -669,6 +669,125 @@
       opacity: .55;
       cursor: progress;
     }
+    .output-video {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .output-video h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+    .output-video video {
+      width: 100%;
+      max-height: 70vh;
+      border-radius: 6px;
+      background: #000;
+      display: block;
+    }
+    .transcript-verify {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .transcript-header h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+    .transcript-header .hint {
+      margin: 4px 0 12px;
+      font-size: 13px;
+    }
+    .transcript-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 360px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .transcript-row {
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1.2fr) minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 10px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #fafafa;
+      text-align: left;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+    .transcript-row:hover { background: #f0f4f8; border-color: #cbd5e1; }
+    .transcript-row.active { background: #eaf3ff; border-color: #3b82f6; }
+    .transcript-row.dirty {
+      background: #fef3c7;
+      border-color: #f59e0b;
+    }
+    .transcript-seek {
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      color: #475569;
+      background: transparent;
+      border: 1px solid transparent;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      align-self: start;
+    }
+    .transcript-seek:hover {
+      background: #fff;
+      border-color: #cbd5e1;
+      color: #111;
+    }
+    .transcript-cell {
+      outline: none;
+      border-radius: 4px;
+      padding: 2px 4px;
+      transition: background 0.12s ease, box-shadow 0.12s ease;
+      cursor: text;
+      min-height: 1.4em;
+    }
+    .transcript-cell:hover { background: rgba(255, 255, 255, 0.6); }
+    .transcript-cell:focus {
+      background: #fff;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+    }
+    .transcript-actions {
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .is-busy-disabled {
+      opacity: 0.45;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+    .transcript-edit-status {
+      font-size: 13px;
+      color: #64748b;
+    }
+    .transcript-ts {
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      color: #64748b;
+      padding-top: 2px;
+    }
+    .transcript-zh {
+      font-size: 14px;
+      line-height: 1.45;
+      color: #111827;
+      word-break: break-word;
+    }
+    .transcript-en {
+      font-size: 13px;
+      line-height: 1.45;
+      color: #475569;
+      word-break: break-word;
+    }
     .candidates {
       padding: 14px;
       border: 1px solid var(--line);
@@ -901,12 +1020,6 @@
                 <span class="cover-name" data-i18n="coverHookName">全白爆點</span>
                 <span class="cover-desc" data-i18n="coverHookDesc">大白字＋一個高亮詞，像 Hormozi、Gary V 那種 TikTok 風格。</span>
               </label>
-              <label class="cover-option">
-                <input type="radio" name="cover_style" value="magazine_pop">
-                <div class="thumb pop"></div>
-                <span class="cover-name" data-i18n="coverPopName">繽紛大字</span>
-                <span class="cover-desc" data-i18n="coverPopDesc">全幅淡淡黑色蒙版＋橘色＋萊姆綠的雙色標題，沒有 POV 也沒有底部 hook。</span>
-              </label>
             </div>
           </div>
 
@@ -1075,6 +1188,17 @@
         coverUpdating: "正在更新封面…",
         coverUpdated: "封面已更新",
         coverUpdateFailed: "封面更新失敗，請再試一次",
+        outputVideoTitle: "輸出影片",
+        verifyTitle: "字幕對照（可直接編輯）",
+        verifyHelp: "左邊時間可跳到影片那一刻。中文 / 英文格子可以直接點下去修改；改完按下方「套用字幕修改」會重新燒進影片。",
+        verifyLoading: "載入字幕對照中…",
+        verifyEmpty: "這支影片沒有偵測到語音段落。",
+        verifyError: "字幕對照載入失敗。",
+        verifySeekHint: "跳到這一刻",
+        applyEditsButton: "套用字幕修改（會重新燒一次影片，約 30 秒）",
+        verifyApplying: "重新燒字幕中⋯ 大約需要 30 秒",
+        verifyApplied: "字幕已更新，重新播放即可看到。",
+        verifyApplyFailed: "字幕重新燒失敗",
         rulesTitle: "上傳規則與資安",
         ruleDurationTitle: "最長 10 分鐘",
         ruleDurationText: "上傳後會先用 FFprobe 驗證長度，超過就拒絕處理。",
@@ -1160,6 +1284,17 @@
         coverUpdating: "Updating cover…",
         coverUpdated: "Cover updated",
         coverUpdateFailed: "Could not update the cover, please try again",
+        outputVideoTitle: "Output video",
+        verifyTitle: "Caption check (editable)",
+        verifyHelp: "Click the time on the left to jump the video. Click a ZH or EN cell to edit. When you're done, press \"Apply caption edits\" below to re-burn the video.",
+        verifyLoading: "Loading caption check…",
+        verifyEmpty: "No speech segments detected in this clip.",
+        verifyError: "Could not load caption check.",
+        verifySeekHint: "Jump to this moment",
+        applyEditsButton: "Apply caption edits (re-burns the video, ~30 seconds)",
+        verifyApplying: "Re-burning captions… ~30 seconds",
+        verifyApplied: "Captions updated. Replay to see the new burn.",
+        verifyApplyFailed: "Caption re-burn failed",
         rulesTitle: "Upload Rules & Security",
         ruleDurationTitle: "10 minutes max",
         ruleDurationText: "The app validates duration with FFprobe before processing and rejects longer videos.",
@@ -1203,11 +1338,87 @@
           : node.dataset.titleZh;
       });
       renderFileCard(video.files[0]);
-      // If a finished job is on screen, re-render the cover + relabel pills in
-      // the new language so the user sees the change immediately.
-      if (previous && previous !== lang && result.classList.contains("show") && result.dataset.jobId) {
-        relabelStylePills();
-        regenerateCoverForLanguage(result.dataset.jobId, lang);
+      // Per-language session model: ZH and EN are independent pages, each
+      // remembers its OWN finished job. Switching ZH→EN snapshots ZH then
+      // tries to restore EN (fresh if none). Switching EN→ZH reverses it.
+      // Round-tripping no longer destroys the result the user already has.
+      if (previous && previous !== lang) {
+        snapshotSession(previous);
+        restoreSession(lang);
+      }
+    }
+
+    function sessionKey(lang) {
+      return `reels.session.${lang}`;
+    }
+
+    function snapshotSession(lang) {
+      // Save the active job_id + cover style so we can rebuild the same view
+      // when the user switches back. The job files live on disk under
+      // outputs/<id>/; the 15-min cleanup is the upper bound on memory.
+      //
+      // CRITICAL: never proactively REMOVE the session here. Removal must
+      // be explicit (`再剪一支影片` button) or driven by a 404 during
+      // `restoreSession`. Otherwise switching languages mid-processing
+      // would silently wipe the other side's saved result.
+      const jobId = result.dataset.jobId;
+      if (!jobId || !result.classList.contains("show")) {
+        return;
+      }
+      const snapshot = {
+        job_id: jobId,
+        cover_style: result.dataset.style || "editorial",
+        saved_at: Date.now(),
+      };
+      localStorage.setItem(sessionKey(lang), JSON.stringify(snapshot));
+    }
+
+    async function restoreSession(lang) {
+      // First clear the on-screen state without dropping the OTHER lang's
+      // saved session.
+      activePollToken = null;
+      video.value = "";
+      video.type = "";
+      video.type = "file";
+      renderFileCard(null);
+      result.classList.remove("show");
+      result.innerHTML = "";
+      delete result.dataset.jobId;
+      delete result.dataset.style;
+      unlockTopCoverStyle();
+      resetProgressUi();
+      clearError();
+      submit.disabled = false;
+      submit.textContent = t("startButton");
+
+      // Now try to hydrate from this lang's saved session, if any.
+      const raw = localStorage.getItem(sessionKey(lang));
+      if (!raw) return;
+      let snapshot;
+      try {
+        snapshot = JSON.parse(raw);
+      } catch (err) {
+        localStorage.removeItem(sessionKey(lang));
+        return;
+      }
+      try {
+        const response = await fetch(`/jobs/${snapshot.job_id}`);
+        if (!response.ok) {
+          // Server forgot it (15-min cleanup, restart, etc.) — drop the
+          // stale snapshot so we don't try again next round-trip.
+          localStorage.removeItem(sessionKey(lang));
+          return;
+        }
+        const data = await response.json();
+        // Server reports finished jobs as status="done" (poll path). Accept
+        // both wordings just in case future code emits "complete".
+        if ((data.status !== "done" && data.status !== "complete") || !data.result) return;
+        const videoUrl = `/outputs/${snapshot.job_id}/${data.result.video}`;
+        const coverUrl = `/outputs/${snapshot.job_id}/${data.result.cover}?t=${Date.now()}`;
+        renderResult(snapshot.job_id, videoUrl, coverUrl, data.result.cover_candidates || [], data.result.cover_style || snapshot.cover_style);
+      } catch (err) {
+        // Network blip — silently leave the user on a fresh upload UI.
+        console.warn("restoreSession failed:", err);
       }
     }
 
@@ -1271,7 +1482,53 @@
 
     langZh.addEventListener("click", () => applyLanguage("zh"));
     langEn.addEventListener("click", () => applyLanguage("en"));
-    chooseFile.addEventListener("click", () => video.click());
+
+    // Centralised reset so the top dropzone AND the "再剪一支影片" button at
+    // the bottom both clear the same state. The user kept scrolling up to
+    // re-pick a file from the dropzone after a previous job finished — that
+    // used to silently fail because the result panel was still on screen and
+    // the form was in a half-locked state.
+    // Token that identifies the currently-active job. Every fresh upload
+    // bumps it; reset bumps it. The `poll()` loop checks against this token
+    // before painting anything, so stale in-flight responses from cancelled
+    // jobs can't sneak an error or progress update into the new view.
+    let activePollToken = null;
+
+    function resetForNextUpload() {
+      const jobId = result.dataset.jobId;
+      if (jobId) {
+        localStorage.removeItem(`reels.activeJob.${jobId}`);
+      }
+      localStorage.removeItem(activeJobKey);
+      // The user explicitly hit "再剪一支影片" / dropped a new file: drop
+      // this lang's saved session too. The OTHER lang's session is
+      // untouched -- you only reset the page you're currently looking at.
+      localStorage.removeItem(sessionKey(currentLang));
+      activePollToken = null;  // any pending poll() will see this and bail
+      video.value = "";
+      video.type = "";
+      video.type = "file";
+      renderFileCard(null);
+      result.classList.remove("show");
+      result.innerHTML = "";
+      delete result.dataset.jobId;
+      delete result.dataset.style;
+      unlockTopCoverStyle();
+      resetProgressUi();
+      clearError();
+      submit.disabled = false;
+      submit.textContent = t("startButton");
+    }
+
+    chooseFile.addEventListener("click", () => {
+      // If a previous job's result is on screen, the user clicking the top
+      // dropzone clearly means "start a new edit". Reset everything first
+      // so the new upload doesn't fight with stale state.
+      if (result.classList.contains("show")) {
+        resetForNextUpload();
+      }
+      video.click();
+    });
     applyLanguage(currentLang);
 
     function setProgress(value, mode = "determinate") {
@@ -1578,6 +1835,12 @@
     });
     drop.addEventListener("drop", (event) => {
       if (event.dataTransfer.files.length) {
+        // Drag-and-drop while a previous result is on screen also counts as
+        // "start a new edit" — reset the panel first so the new upload runs
+        // cleanly.
+        if (result.classList.contains("show")) {
+          resetForNextUpload();
+        }
         video.files = event.dataTransfer.files;
         renderFileCard(video.files[0]);
         clearError();
@@ -1623,15 +1886,54 @@
         return;
       }
       localStorage.setItem(activeJobKey, created.job_id);
+      // Pin the language this job was uploaded under. If the user flips
+      // the language toggle mid-processing, the completion handler still
+      // saves the result under the ORIGINAL language so the ZH↔EN round
+      // trip preserves both sides independently.
+      localStorage.setItem("reels.activeJob.lang", currentLang);
+      activePollToken = created.job_id;
       state.textContent = t("processing");
       uploadPct.textContent = "100%";
       showProcessing({ percent: 28, stage: "validate", stage_percent: 8, elapsed_seconds: 0, eta_seconds: null });
       poll(created.job_id);
     });
 
-    function restoreActiveJob() {
+    async function restoreActiveJob() {
       const jobId = localStorage.getItem(activeJobKey);
       if (!jobId) return;
+      // Before painting any "processing" UI, confirm the job still exists
+      // on the server. The 15-minute auto-cleanup means a stale localStorage
+      // entry will otherwise paint a fake progress bar and then immediately
+      // flash "找不到這個任務" on the user's screen.
+      let resp;
+      try {
+        resp = await fetch(`/jobs/${jobId}`);
+      } catch (err) {
+        // Network blip -- leave the page clean rather than flash a wrong state.
+        return;
+      }
+      if (!resp.ok) {
+        // 404 = job was cleaned up. Silently drop the stale id; user lands
+        // on the empty upload UI.
+        localStorage.removeItem(activeJobKey);
+        return;
+      }
+      const data = await resp.json();
+      // If the job already finished while the tab was closed, hydrate the
+      // result panel directly instead of pretending we're still processing.
+      if ((data.status === "done" || data.status === "complete") && data.result) {
+        const videoUrl = `/outputs/${jobId}/${data.result.video}`;
+        const coverUrl = `/outputs/${jobId}/${data.result.cover}?t=${Date.now()}`;
+        renderResult(jobId, videoUrl, coverUrl, data.result.cover_candidates || [], data.result.cover_style);
+        snapshotSession(currentLang);
+        return;
+      }
+      if (data.status === "error") {
+        // Job died before we got back -- don't replay the corpse.
+        localStorage.removeItem(activeJobKey);
+        return;
+      }
+      // Genuinely still running: paint the processing state and resume polling.
       statusBox.classList.add("show");
       result.classList.remove("show");
       result.innerHTML = "";
@@ -1646,20 +1948,27 @@
         elapsed_seconds: 0,
         eta_seconds: null
       });
+      activePollToken = jobId;
       poll(jobId);
     }
 
     async function poll(jobId) {
+      // Bail on stale polls. The user reset (language switch, top
+      // dropzone, "再剪一支影片") between the previous tick and now: don't
+      // paint stale state onto the fresh upload UI.
+      if (activePollToken !== jobId) return;
       let response;
       let data;
       try {
         response = await fetch(`/jobs/${jobId}`);
         data = await response.json();
       } catch (_error) {
+        if (activePollToken !== jobId) return;
         showError(t("uploadFailed"), "errorNetworkHelp");
         submit.textContent = t("startButton");
         return;
       }
+      if (activePollToken !== jobId) return;
       if (!response.ok) {
         showError(data.error || t("failed"), errorHelpKey(data.error, response.status));
         localStorage.removeItem(activeJobKey);
@@ -1696,18 +2005,31 @@
       const videoUrl = `/outputs/${jobId}/${data.result.video}`;
       const coverUrl = `/outputs/${jobId}/${data.result.cover}?t=${Date.now()}`;
       renderResult(jobId, videoUrl, coverUrl, data.result.cover_candidates || [], data.result.cover_style);
+      // Persist under the language the job was UPLOADED in, NOT the current
+      // language. If the user already flipped languages while it ran, the
+      // result still belongs to its source language.
+      const jobLang = localStorage.getItem("reels.activeJob.lang") || currentLang;
+      snapshotSession(jobLang);
+      // If the user is still on that language, the result panel is now
+      // visible. If they've switched away, the result stays saved for
+      // restoreSession() to pick up later -- the visible panel should
+      // belong to the CURRENT language, so wipe the on-screen render and
+      // tell them their other-language video is waiting.
+      if (jobLang !== currentLang) {
+        result.classList.remove("show");
+        result.innerHTML = "";
+      }
     }
 
     const COVER_STYLE_LABELS = {
       editorial: { zh: "雜誌大標", en: "Editorial Bold" },
       hook_caption: { zh: "全白爆點", en: "All-White Hook" },
-      magazine_pop: { zh: "繽紛大字", en: "Color Pop" },
       // Legacy aliases kept so old jobs in localStorage still surface labels.
       creator: { zh: "全白爆點", en: "All-White Hook" },
       high_contrast: { zh: "繽紛大字", en: "Color Pop" },
     };
 
-    const STYLE_SWITCHER_ORDER = ["editorial", "hook_caption", "magazine_pop"];
+    const STYLE_SWITCHER_ORDER = ["editorial", "hook_caption"];
 
     function activeCoverStyle() {
       const checked = document.querySelector("input[name='cover_style']:checked");
@@ -1747,12 +2069,28 @@
           </div>
         </section>
         ${candidateMarkup}
+        <section class="output-video">
+          <h3>${t("outputVideoTitle")}</h3>
+          <video id="outputVideo" controls preload="metadata" playsinline src="${videoUrl}"></video>
+        </section>
+        <section class="transcript-verify">
+          <div class="transcript-header">
+            <h3>${t("verifyTitle")}</h3>
+            <p class="hint">${t("verifyHelp")}</p>
+          </div>
+          <div class="transcript-list" id="transcriptList">${t("verifyLoading")}</div>
+          <div class="transcript-actions" id="transcriptActions" hidden>
+            <button class="primary" type="button" id="applyCaptionEdits">${t("applyEditsButton")}</button>
+            <span class="transcript-edit-status" id="captionEditStatus"></span>
+          </div>
+        </section>
         <div class="result-actions">
-          <a class="download" href="${videoUrl}" target="_blank">${t("openVideo")}</a>
-          <a class="download" id="openCoverLink" href="${coverUrl}" target="_blank">${t("openCover")}</a>
+          <a class="download" href="${videoUrl}" target="_blank" rel="noopener">${t("openVideo")}</a>
+          <a class="download" id="openCoverLink" href="${coverUrl}" target="_blank" rel="noopener">${t("openCover")}</a>
           <button class="primary" id="resetFlow" type="button">${t("resetButton")}</button>
         </div>
       `;
+      loadTranscriptTable(jobId);
       result.classList.add("show");
       result.dataset.jobId = jobId;
       result.dataset.style = styleNow;
@@ -1769,13 +2107,10 @@
       // the *only* place to change the cover style is the result panel.
       lockTopCoverStyle(styleNow);
       document.getElementById("resetFlow").addEventListener("click", () => {
-        localStorage.removeItem(activeJobKey);
-        video.value = "";
-        renderFileCard(null);
-        result.classList.remove("show");
-        result.innerHTML = "";
-        unlockTopCoverStyle();
-        resetProgressUi();
+        resetForNextUpload();
+        // After bottom button: scroll up to the dropzone so it's obvious
+        // where to drop the next file.
+        document.querySelector(".drop")?.scrollIntoView({behavior: "smooth", block: "center"});
       });
     }
 
@@ -1837,6 +2172,171 @@
       } finally {
         switcher.querySelectorAll("button.style-pill").forEach((node) => { node.disabled = false; });
       }
+    }
+
+    async function loadTranscriptTable(jobId) {
+      const list = document.getElementById("transcriptList");
+      const actions = document.getElementById("transcriptActions");
+      if (!list) return;
+      try {
+        const res = await fetch(`/outputs/${jobId}/transcript_combined.json`, { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        const segments = data.segments || [];
+        if (segments.length === 0) {
+          list.innerHTML = `<p class="hint">${t("verifyEmpty")}</p>`;
+          return;
+        }
+        const video = document.getElementById("outputVideo");
+        // Track the original text so we can detect what the user edited.
+        const originals = new Map();
+        list.innerHTML = "";
+        segments.forEach((seg) => {
+          const ts = formatTimestamp(seg.start);
+          // <div> instead of <button> so child contenteditable cells get the
+          // text-edit cursor + selection behaviour browsers expect.
+          const row = document.createElement("div");
+          row.className = "transcript-row";
+          row.dataset.start = String(seg.start);
+          row.dataset.end = String(seg.end);
+          row.innerHTML = `
+            <button class="transcript-seek" type="button" title="${t("verifySeekHint")}">${ts}</button>
+            <span class="transcript-cell transcript-zh" contenteditable="true" spellcheck="false">${escapeHtml(seg.zh || "")}</span>
+            <span class="transcript-cell transcript-en" contenteditable="true" spellcheck="false">${escapeHtml(seg.en || "")}</span>
+          `;
+          originals.set(String(seg.start), {zh: seg.zh || "", en: seg.en || ""});
+          // Seek button: jump video to this segment's start
+          row.querySelector(".transcript-seek").addEventListener("click", () => {
+            if (!video) return;
+            try {
+              video.currentTime = Math.max(0, parseFloat(row.dataset.start) - 0.05);
+              video.play().catch(() => {});
+            } catch (err) { /* ignore */ }
+            list.querySelectorAll(".transcript-row.active").forEach((n) => n.classList.remove("active"));
+            row.classList.add("active");
+          });
+          // Track dirty state per row when user edits a cell
+          row.querySelectorAll(".transcript-cell").forEach((cell) => {
+            cell.addEventListener("input", () => {
+              const orig = originals.get(row.dataset.start) || {zh: "", en: ""};
+              const zh = (row.querySelector(".transcript-zh").innerText || "").trim();
+              const en = (row.querySelector(".transcript-en").innerText || "").trim();
+              row.classList.toggle("dirty", zh !== orig.zh || en !== orig.en);
+              const anyDirty = list.querySelector(".transcript-row.dirty") !== null;
+              if (actions) actions.hidden = !anyDirty;
+            });
+          });
+          list.appendChild(row);
+        });
+        // Apply button: collect dirty rows, POST to /jobs/<id>/captions
+        const applyBtn = document.getElementById("applyCaptionEdits");
+        const status = document.getElementById("captionEditStatus");
+        if (applyBtn) {
+          applyBtn.onclick = async () => {
+            const rows = list.querySelectorAll(".transcript-row");
+            const payload = [];
+            rows.forEach((row) => {
+              payload.push({
+                start: parseFloat(row.dataset.start),
+                end: parseFloat(row.dataset.end),
+                zh: (row.querySelector(".transcript-zh").innerText || "").trim(),
+                en: (row.querySelector(".transcript-en").innerText || "").trim(),
+              });
+            });
+            // Lock everything else on the page while we re-burn so the
+            // user can't fire off conflicting actions ("再剪一支影片",
+            // switch cover style, edit more rows) mid-render.
+            applyBtn.disabled = true;
+            setResultPanelBusy(true);
+            if (status) status.textContent = t("verifyApplying");
+            try {
+              const resp = await fetch(`/jobs/${jobId}/captions`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({segments: payload}),
+              });
+              const j = await resp.json();
+              if (!resp.ok) throw new Error(j.error || "HTTP " + resp.status);
+              if (status) status.textContent = t("verifyApplied");
+              // Force the <video> element to reload the freshly-encoded mp4
+              // (cache buster keyed to server timestamp).
+              if (video && j.video_url) {
+                video.src = j.video_url;
+                video.load();
+              }
+              // Clear dirty flags so the apply button can hide again.
+              list.querySelectorAll(".transcript-row.dirty").forEach((n) => n.classList.remove("dirty"));
+              if (actions) actions.hidden = true;
+            } catch (err) {
+              if (status) status.textContent = t("verifyApplyFailed") + ": " + err.message;
+            } finally {
+              applyBtn.disabled = false;
+              setResultPanelBusy(false);
+            }
+          };
+        }
+      } catch (err) {
+        list.innerHTML = `<p class="hint">${t("verifyError")}</p>`;
+        console.warn("transcript fetch failed:", err);
+      }
+    }
+
+    function setResultPanelBusy(busy) {
+      // Disable every button + link + editable cell in the result panel
+      // (except the apply button itself, which is managed by its own
+      // disabled state) so the user can't fire conflicting actions while
+      // the server is re-encoding the video.
+      const selectors = [
+        "#resetFlow",
+        ".style-pill",
+        ".candidate",
+        ".download",
+        ".transcript-cell",
+        ".transcript-seek",
+      ];
+      selectors.forEach((sel) => {
+        result.querySelectorAll(sel).forEach((node) => {
+          if (busy) {
+            node.classList.add("is-busy-disabled");
+            if (node.tagName === "BUTTON" || node.tagName === "INPUT") {
+              node.disabled = true;
+            } else if (node.tagName === "A") {
+              node.dataset.savedHref = node.getAttribute("href");
+              node.removeAttribute("href");
+            } else {
+              node.contentEditable = "false";
+            }
+          } else {
+            node.classList.remove("is-busy-disabled");
+            if (node.tagName === "BUTTON" || node.tagName === "INPUT") {
+              node.disabled = false;
+            } else if (node.tagName === "A") {
+              if (node.dataset.savedHref) {
+                node.setAttribute("href", node.dataset.savedHref);
+                delete node.dataset.savedHref;
+              }
+            } else if (node.classList.contains("transcript-cell")) {
+              node.contentEditable = "true";
+            }
+          }
+        });
+      });
+    }
+
+    function formatTimestamp(seconds) {
+      const total = Math.max(0, Math.floor(seconds));
+      const mm = Math.floor(total / 60).toString().padStart(2, "0");
+      const ss = (total % 60).toString().padStart(2, "0");
+      return `${mm}:${ss}`;
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
     }
 
     function renderCandidates(jobId, candidates) {

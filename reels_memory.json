@@ -10,7 +10,7 @@
     "chinese_letter_spacing": 2,
     "english_letter_spacing": 0.5,
     "chinese_bottom_margin": 470,
-    "english_bottom_margin": 390,
+    "english_bottom_margin": 277,
     "safe_area_note": "Title and subtitles stay away from Instagram Reels top and bottom UI.",
     "mixed_language_spacing": true,
     "mixed_language_spacing_rule": "When Chinese characters and ASCII letters/digits sit next to each other, always insert exactly one space between them (applies to subtitles, title, and cover copy).",
@@ -26,8 +26,9 @@
   },
   "editing": {
     "remove_pauses": true,
-    "silence_noise_db": -35,
-    "silence_min_duration": 0.32,
+    "silence_noise_db": -42,
+    "silence_min_duration": 0.55,
+    "silence_tuning_note": "Chinese-tuned: -42 dB threshold + 0.55s minimum stops the detector from clipping syllable tails (Tone 3 dipping endings, -n/-ng nasal releases). Combined with build_pieces cut_start +0.28s and cut_end -0.28s, only true pauses >0.74s get trimmed and 280ms of audio is preserved on each side.",
     "keep_bye_ending": true,
     "do_not_over_rewrite_story": true,
     "remove_filler_words_in_subtitle": true,
@@ -38,12 +39,13 @@
   "performance": {
     "mode": "mlx",
     "mlx_whisper_repo": "mlx-community/whisper-large-v3-turbo",
+    "mlx_translate_repo": "mlx-community/whisper-medium-mlx",
     "whisper_model": "Systran/faster-whisper-large-v3-turbo",
     "compute_type": "int8",
     "beam_size": 1,
     "cpu_threads": 4,
     "word_timestamps": true,
-    "note": "On Apple Silicon arm64 we use mlx-whisper (Metal GPU + ANE, ~20-60x realtime on M2/M3). Whisper model downloads from mlx-community/whisper-large-v3-turbo on first run (~1.5 GB, cached in ~/.cache/huggingface). Intel/Windows fall back to Systran/faster-whisper-large-v3-turbo (~4x realtime). EN subs come from a dedicated Marian ZH->EN translator (CT2 int8, bundled in .app), not a second Whisper pass."
+    "note": "Two-model pipeline on Apple Silicon arm64: (a) mlx-community/whisper-large-v3-turbo for fast ZH transcription (~25s on 3-min audio), (b) mlx-community/whisper-medium-mlx with task='translate' for ZH->EN (~98s, but quality is dramatically better than dedicated NMT models like Marian opus-mt or NLLB-200-600M on talking-head content). Both download from HF on first run, cached in ~/.cache/huggingface. Intel/Windows fall back to Systran/faster-whisper-large-v3-turbo + bundled Marian."
   },
   "export": {
     "format": "IG Reels",
