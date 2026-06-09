@@ -1823,15 +1823,21 @@ def render_video(video, filter_path, output, memory):
 
     if encoder == "h264_videotoolbox":
         # VideoToolbox doesn't accept libx264's -crf / -preset / -profile/level
-        # flags. We hand it -q:v (constant-quality VBR, 0=worst..100=best)
-        # which is the VT equivalent. q=60 maps roughly to libx264 CRF 22 at
-        # 720x1280 talking-head content. -allow_sw 1 lets it transparently
-        # fall back to software encoding if the HW encoder is busy or refuses
-        # the input (e.g. unusual color spaces). No -maxrate/-bufsize on
-        # purpose; the same sub-1s first-concat-piece problem applies and CBR
-        # would re-introduce the grey first frames.
+        # flags. Before ffmpeg 8 we drove it with -q:v (constant-quality VBR,
+        # 0=worst..100=best); ffmpeg 8.x REMOVED that knob ("qscale not
+        # available for encoder. Use -b:v bitrate instead") and any build
+        # using -q:v dies with exit 187 right at first frame.
+        # So now we feed VT an average bitrate plus a generous peak ceiling.
+        # 8M / 12M at 720x1280 30fps matches IG's recommended Reels band and
+        # stays well clear of the sub-1s first-concat-piece bug that earlier
+        # killed CBR (the encoder gets enough budget to keep frame 0 painted).
+        # -allow_sw 1 lets VT transparently fall back to software encoding if
+        # the HW encoder is busy or refuses the input (e.g. unusual color
+        # spaces).
         cmd += [
-            "-q:v", str(export.get("videotoolbox_quality", 60)),
+            "-b:v", str(export.get("videotoolbox_bitrate", "8M")),
+            "-maxrate", str(export.get("videotoolbox_maxrate", "12M")),
+            "-bufsize", str(export.get("videotoolbox_bufsize", "16M")),
             "-allow_sw", "1",
             "-realtime", "0",
         ]

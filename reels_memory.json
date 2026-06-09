@@ -57,7 +57,10 @@
     "audio_bitrate": "160k",
     "pix_fmt": "yuv420p",
     "x264_preset": "medium",
-    "target_note": "CRF 22 keeps faces crisp at 720x1280. Bitrate target / -tune / forced -g all break the first second of the Reel because the first concat piece is sub-1s, so we keep the encoder in pure CRF mode."
+    "videotoolbox_bitrate": "8M",
+    "videotoolbox_maxrate": "12M",
+    "videotoolbox_bufsize": "16M",
+    "target_note": "CRF 22 keeps faces crisp at 720x1280. ffmpeg 8.x removed -q:v for h264_videotoolbox, so VT mode uses -b:v VBR + a generous maxrate cap. 8M average / 12M peak hits the IG Reels recommended bitrate band without starving the first sub-1s concat piece."
   },
   "cover": {
     "enabled": true,
