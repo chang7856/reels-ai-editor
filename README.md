@@ -1,8 +1,12 @@
-# Reels AI Editor
+<p align="center">
+  <img src="assets/icon-1024.png" width="180" alt="Reels AI Editor — Y2K pixel-scissors icon">
+</p>
 
-**Drop a talking-head video in. Get a vertical IG Reel out — pauses cut, captions burned in, cover designed.**
+<h1 align="center">Reels AI Editor</h1>
 
-把對著鏡頭講話的影片丟進去，自動剪停頓、燒字幕、產生封面，輸出 IG 直式 Reels。
+<p align="center"><strong>Drop a talking-head video in. Get a vertical IG Reel out — pauses cut, captions burned in, cover designed.</strong></p>
+
+<p align="center">把對著鏡頭講話的影片丟進去，自動剪停頓、燒字幕、產生封面，輸出 IG 直式 Reels。</p>
 
 ## ⬇️ 直接下載 / Direct download
 

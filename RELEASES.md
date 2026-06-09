@@ -1,4 +1,8 @@
-# Release notes
+<p align="center">
+  <img src="assets/icon-1024.png" width="160" alt="Reels AI Editor">
+</p>
+
+<h1 align="center">Release notes</h1>
 
 ## ⚡ How to install (read this first)
 
