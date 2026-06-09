@@ -99,6 +99,15 @@ Date last passed end-to-end: _(none)_
 - [ ] Background colors / progress bars never appear without a real
       in-flight upload
 
+## h264_videotoolbox encoder (ffmpeg 8.x)
+
+- [ ] `render_video` passes `-b:v <bitrate>` for h264_videotoolbox,
+      NEVER `-q:v <qscale>` (ffmpeg 8 removed qscale support → exit 187)
+- [ ] Default: 8M average, 12M maxrate, 16M bufsize at 720x1280
+- [ ] Render budget on M-chip: ≥3x realtime (137s clip → ≤45s render)
+- [ ] First-second-grey-frame bug stays fixed
+      (the original reason we switched from CBR to qscale)
+
 ## Speed budget (3-min input on M-chip Mac)
 
 - [ ] Whisper-medium MLX translate: ~80s

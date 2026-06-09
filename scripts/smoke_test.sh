@@ -96,6 +96,14 @@ echo "=== Subtitle pipeline: layout assertion exists ==="
 gate "_verify_subtitle_layout in code" \
     'grep -q "_verify_subtitle_layout" reels_gui_pipeline.py'
 
+echo "=== h264_videotoolbox uses -b:v not -q:v (ffmpeg 8 compat) ==="
+# ffmpeg 8.x dropped -q:v / qscale for h264_videotoolbox. Any build that
+# still passes -q:v dies with exit 187 at frame 0. Locking this fix.
+gate "videotoolbox path does NOT pass -q:v" \
+    'grep -B 1 -A 6 "encoder == \"h264_videotoolbox\"" reels_gui_pipeline.py | grep -q -- "-b:v"  && ! grep -B 1 -A 12 "encoder == \"h264_videotoolbox\"" reels_gui_pipeline.py | grep -q -- "\"-q:v\""'
+gate "videotoolbox_bitrate default in reels_memory.json" \
+    'grep -q "videotoolbox_bitrate" reels_memory.json'
+
 echo "=== wrap_zh tokenizer keeps OK,CheckCheck atomic ==="
 .venv-arm64/bin/python <<'PY'
 import sys; sys.path.insert(0, '.')
