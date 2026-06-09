@@ -4,7 +4,121 @@
 
 把對著鏡頭講話的影片丟進去，自動剪停頓、燒字幕、產生封面，輸出 IG 直式 Reels。
 
-> 中文版說明往下捲，跳到 **[中文使用說明](#中文使用說明)**
+> 📘 中文使用者：直接看下面這段「中文 — 安裝跟使用」就好。
+>
+> 📗 English readers: scroll past the Chinese block to **[English — install & daily use](#english--install--daily-use)**.
+
+---
+
+## 中文 — 安裝跟使用
+
+下面這段是給「**完全沒做過開發、第一次看 GitHub 也不知道是什麼**」的人看的。
+
+### 🍎 在 Mac 上裝（一輩子只做一次）
+
+1. 到 [**Releases**](../../releases/latest) 頁面，下載對應你 Mac 的檔案：
+   - **Mac 是 M1 / M2 / M3 / M4**（2020 年後的）→ 抓 `ReelsAIEditor-macOS-arm64.dmg`
+   - **Mac 是 Intel 處理器**（2020 年前的）→ 抓 `ReelsAIEditor-macOS-intel.dmg`
+   - 不確定？點左上角 🍎 →「關於這台 Mac」→ 看「晶片」欄。寫 M 開頭就是 arm64
+2. **雙擊** 剛下載的 `.dmg`
+3. Finder 跳出一個小視窗，裡面有 ReelsAIEditor 圖示。**把它拖到旁邊的「應用程式」（Applications）資料夾**
+4. 視窗右上角 X 關掉。Desktop 上的灰色磁碟圖示，按右鍵 → 退出
+5. **打開「終端機」**：⌘ + 空白鍵搜尋 `Terminal`，按 Enter
+6. 把下面這行**整段複製、貼進去、按 Enter**：
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/ReelsAIEditor.app
+   ```
+
+7. 看起來沒反應就是成功了（Mac 的習慣：成功就靜悄悄）
+8. 關掉終端機。**整輩子不用再開了。**
+
+> 為什麼要這一步？因為我沒給 Apple 每年 $99 美金當註冊開發者，所以 Mac 預設會擋。這行指令對 Mac 任何使用者都有效，不需要密碼，不會動到別的東西，只是告訴 Mac「這個 App 我自己下載的，別擋」。
+
+### 🖱️ 每次要剪片的時候
+
+跟用一般 App 一樣，**就點 .app 圖示**：
+
+1. 從以下任一處點 **ReelsAIEditor** 圖示：
+   - Launchpad 的 App 列表
+   - Finder → 應用程式 → 雙擊 `ReelsAIEditor`
+   - Spotlight（⌘ + 空白鍵）→ 打 `reels` → Enter
+2. 瀏覽器會**自動跳出** `http://127.0.0.1:5057/`
+3. 把影片拖進去 → 等剪好 → 下載
+4. 用完直接關瀏覽器分頁就好
+
+> 不小心關掉分頁但 App 還沒關？瀏覽器網址列打 `127.0.0.1:5057` 就回來。
+> 重開機、關機後，再點一次 .app 圖示就好，**不用再跑 xattr**。
+
+### 🪟 在 Windows 上裝（更簡單）
+
+1. 下載 `ReelsAIEditor-Windows-x64.zip`
+2. 解壓縮
+3. 雙擊 `ReelsAIEditor.exe`
+4. Windows 可能會跳「Windows 已保護您的電腦」→ 點「**其他資訊**」→「**仍要執行**」
+5. 之後瀏覽器自動開啟 → 把影片拖進去
+
+每次要剪：雙擊 `ReelsAIEditor.exe`。
+
+### ⚠️ 第一次跑會等 1.5 GB 模型下載
+
+第一支影片剪的時候，會多花 30-60 秒下載語音辨識模型（約 1.5 GB）。**只下載這一次**，之後永久 cache。
+
+---
+
+## English — install & daily use
+
+This section is for **first-time users who don't know what GitHub is, have never seen Terminal, and just want the thing to work**.
+
+### 🍎 Install on Mac (one-time, ever)
+
+1. Go to [**Releases**](../../releases/latest) and download the file for your Mac:
+   - **Mac with M1 / M2 / M3 / M4** (2020 onwards) → grab `ReelsAIEditor-macOS-arm64.dmg`
+   - **Mac with Intel chip** (pre-2020) → grab `ReelsAIEditor-macOS-intel.dmg`
+   - Not sure? Top-left 🍎 → "About This Mac" → look at "Chip". If it says "M-something", you're on arm64.
+2. **Double-click** the downloaded `.dmg`
+3. A Finder window pops up with the `ReelsAIEditor` icon. **Drag it into the `Applications` folder next to it.**
+4. Close the window. Right-click the grey disk on your Desktop → Eject.
+5. **Open Terminal**: ⌘ + Space → type `Terminal` → Enter
+6. Copy the line below, **paste it into Terminal, hit Enter**:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/ReelsAIEditor.app
+   ```
+
+7. No output = success (Mac convention: silence is good)
+8. Close Terminal. **You'll never need to touch it again.**
+
+> Why this step? I haven't paid Apple's \$99 / year developer fee, so macOS Gatekeeper blocks the app by default. This one-liner works for any Mac user — no password, no system change, just tells macOS "I downloaded this myself, don't block it."
+
+### 🖱️ Daily use — every time you want to edit
+
+Treat it like any other app: **click the icon**.
+
+1. Launch **ReelsAIEditor** from any of these:
+   - Launchpad's app grid
+   - Finder → Applications → double-click `ReelsAIEditor`
+   - Spotlight (⌘ + Space) → type `reels` → Enter
+2. Your browser **auto-opens** `http://127.0.0.1:5057/`
+3. Drop a video in → wait → download
+4. When done, just close the browser tab
+
+> Accidentally closed the tab but app's still running? Type `127.0.0.1:5057` in your browser's address bar.
+> After a reboot, just click the .app icon again — **you don't need to re-run the xattr command**.
+
+### 🪟 Install on Windows (easier)
+
+1. Download `ReelsAIEditor-Windows-x64.zip`
+2. Unzip
+3. Double-click `ReelsAIEditor.exe`
+4. Windows might pop up "Windows protected your PC" → click **More info** → **Run anyway**
+5. Browser opens → drag your video in
+
+Each subsequent use: double-click `ReelsAIEditor.exe`.
+
+### ⚠️ First run downloads a 1.5 GB model
+
+The very first video takes 30-60 seconds longer because it downloads the speech-recognition model (~1.5 GB). **Once only** — cached forever after.
 
 ---
 
@@ -29,38 +143,18 @@ If you have any of those, this is not the tool for you.
 
 ---
 
-## How to install
+## What it does (technical summary)
 
-No Terminal. No `brew install`. No setup. Just download and open.
+(Install + daily-use steps are in the bilingual section above.)
 
-### 1. Download the right .app for your machine
+All three platform builds are actively maintained from v1.1 onwards. See
+[RELEASES.md](RELEASES.md) for the version-by-version changelog.
 
-Go to the [**Releases**](../../releases/latest) page and grab one of:
-
-| File | For | Update status |
-|---|---|---|
-| `ReelsAIEditor-macOS-arm64.dmg` | **Mac with M1/M2/M3/M4** (Apple Silicon, 2020+) | **Actively maintained** |
-| `ReelsAIEditor-macOS-intel.dmg` | **Mac with Intel chip** (pre-2020) | Frozen at v1.0 — no future updates |
-| `ReelsAIEditor-Windows-x64.zip` | **Windows 10/11** | Frozen at v1.0 — no future updates |
-
-Not sure which Mac you have? Click 🍎 → "About This Mac" → look at "Chip". If it says "M-something", grab the **arm64** one.
-
-> **Only the Apple Silicon build gets future updates.** Intel Mac and Windows are published once at v1.0.0 (2026-05-30) as a one-shot snapshot. Full details in [RELEASES.md](RELEASES.md).
-
-### 2. Open the app
-
-**Mac:** Double-click the `.dmg`, drag `ReelsAIEditor` to your Applications folder, then open it.
-
-> First time you open it, macOS will say "ReelsAIEditor cannot be opened because the developer cannot be verified". This is normal — I didn't pay Apple $99/yr. To get past it:
-> 1. Right-click `ReelsAIEditor` → "Open"
-> 2. Click "Open" in the warning dialog
-> Mac will remember this choice.
-
-**Windows:** Unzip, double-click `ReelsAIEditor.exe`.
-
-### 3. Drop a video in
-
-Your browser will open at `http://127.0.0.1:5057`. Pick a Cover Style, drag your video, click **Start Auto Edit**. Wait ~1 minute. Download.
+| File | For |
+|---|---|
+| `ReelsAIEditor-macOS-arm64.dmg` | Mac with M1/M2/M3/M4 (Apple Silicon, 2020+) |
+| `ReelsAIEditor-macOS-intel.dmg` | Mac with Intel chip (pre-2020) |
+| `ReelsAIEditor-Windows-x64.zip` | Windows 10/11 |
 
 ---
 
@@ -126,38 +220,9 @@ If you're running the app on your own Mac, "the computer" is your Mac. If you're
 - 音樂 MV / 大量 B-roll 剪接
 - 橫式 / 方形輸出
 
-### 怎麼安裝
+### 怎麼安裝 + 怎麼用
 
-不用開終端機。不用 `brew install`。不用設定。下載打開就能用。
-
-#### 1. 下載對應你 Mac/PC 的版本
-
-到 [**Releases**](../../releases/latest) 頁面下載：
-
-| 檔案 | 適用 | 更新狀態 |
-|---|---|---|
-| `ReelsAIEditor-macOS-arm64.dmg` | **Mac 是 M1/M2/M3/M4** | **持續更新** |
-| `ReelsAIEditor-macOS-intel.dmg` | **Mac 是 Intel 處理器**（2020 之前） | 停在 v1.0 不再更新 |
-| `ReelsAIEditor-Windows-x64.zip` | **Windows 10/11** | 停在 v1.0 不再更新 |
-
-不知道你 Mac 是哪一種？點左上 🍎 → 「關於這台 Mac」→ 看「晶片」。寫 M 開頭就是 **arm64**。
-
-> **只有 Apple Silicon 版本會持續更新**。Intel Mac 跟 Windows 在 v1.0.0（2026-05-30）發布一次後就不會再更新。完整說明在 [RELEASES.md](RELEASES.md)。
-
-#### 2. 打開 App
-
-**Mac：** 雙擊 `.dmg`，把 `ReelsAIEditor` 拖到「應用程式」資料夾，然後打開它。
-
-> 第一次打開 macOS 會擋你說「無法打開，因為無法驗證開發者」。這是正常的（因為我沒給 Apple $99/年）。解法：
-> 1. 對著 App 按右鍵 → 「打開」
-> 2. 跳出警告再按一次「打開」
-> 以後它會記得，不會再擋。
-
-**Windows：** 解壓縮，雙擊 `ReelsAIEditor.exe`。
-
-#### 3. 丟影片進去
-
-瀏覽器會打開 `http://127.0.0.1:5057`。挑一個封面樣式 → 拖影片 → 按「**開始自動剪輯**」→ 等大概 1 分鐘 → 下載。
+**請看本頁最上面的「中文 — 安裝跟使用」段落**。Mac 一輩子做一次的 `xattr` 指令、每次怎麼用、Windows 怎麼裝，全部都寫在那邊。
 
 ### 把 App 分享給沒裝的人用（免費）
 
