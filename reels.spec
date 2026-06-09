@@ -126,17 +126,21 @@ coll = COLLECT(
     name="ReelsAIEditor",
 )
 
+# Y2K pixel-scissors icon (regenerate with scripts/build_icon.sh).
+_icon_path = ROOT / "assets" / "icon.icns"
+_icon_arg = str(_icon_path) if _icon_path.is_file() else None
+
 if sys.platform == "darwin":
     app = BUNDLE(
         coll,
         name="ReelsAIEditor.app",
-        icon=None,
+        icon=_icon_arg,
         bundle_identifier="com.jessiedchang.reelsaieditor",
         info_plist={
             "CFBundleName": "Reels AI Editor",
             "CFBundleDisplayName": "Reels AI Editor",
-            "CFBundleVersion": "1.0.0",
-            "CFBundleShortVersionString": "1.0.0",
+            "CFBundleVersion": "1.1.0",
+            "CFBundleShortVersionString": "1.1.0",
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "11.0",
             "NSHumanReadableCopyright": "MIT — © 2026 Jessie D. Chang",
