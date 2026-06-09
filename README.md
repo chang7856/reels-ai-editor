@@ -4,7 +4,30 @@
 
 把對著鏡頭講話的影片丟進去，自動剪停頓、燒字幕、產生封面，輸出 IG 直式 Reels。
 
-> 📘 中文使用者：直接看下面這段「中文 — 安裝跟使用」就好。
+## ⬇️ 直接下載 / Direct download
+
+[![Download macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon%20.dmg-blue)](https://github.com/chang7856/reels-ai-editor/releases/download/v1.1.0/ReelsAIEditor-macOS-arm64.dmg)
+[![Download macOS Intel](https://img.shields.io/badge/macOS-Intel%20.dmg-blue)](https://github.com/chang7856/reels-ai-editor/releases/download/v1.1.0/ReelsAIEditor-macOS-intel.dmg)
+[![Download Windows](https://img.shields.io/badge/Windows-x64%20.zip-blueviolet)](https://github.com/chang7856/reels-ai-editor/releases/download/v1.1.0/ReelsAIEditor-Windows-x64.zip)
+
+往下看「中文 — 安裝跟使用」就有一步一步教學。
+
+## 💻 需要什麼 / System requirements
+
+| | Mac (Apple Silicon) | Mac (Intel) | Windows |
+|---|---|---|---|
+| **作業系統 OS** | macOS 12+ | macOS 12+ | Windows 10 / 11 |
+| **記憶體 RAM** | 8 GB+ | 8 GB+ | 8 GB+ |
+| **磁碟空間 Disk** | 3 GB | 3 GB | 3 GB |
+| **網路 Network** | 首次需要（下載模型 1.5 GB）/ Internet on first run only | 同 | 同 |
+| **3 分鐘影片處理時間 / 3-min clip wall time** | **~2.5 分鐘** (MLX + ANE) | ~8-10 分鐘 (CPU fallback) | ~8-10 分鐘 (CPU fallback) |
+| **瀏覽器 Browser** | Safari 14+ / Chrome 100+ | 同 | Chrome 100+ / Edge 100+ |
+
+> ⚠️ **Intel Mac 跟 Windows 跑會慢 3-5×**（沒有 Apple Neural Engine 加速）。要快就用 Apple Silicon。
+
+---
+
+> 📘 中文使用者：直接看下面「中文 — 安裝跟使用」就好。
 >
 > 📗 English readers: scroll past the Chinese block to **[English — install & daily use](#english--install--daily-use)**.
 
@@ -188,15 +211,33 @@ If you're running the app on your own Mac, "the computer" is your Mac. If you're
 
 ---
 
-## Troubleshooting
+## 🆘 卡住了怎麼辦 / If something breaks
+
+**1. 看 job log（最直接）/ Read the job log first**
+
+Mac:
+```bash
+ls -t ~/Library/Application\ Support/ReelsAIEditor/outputs 2>/dev/null || \
+  ls -t /Applications/ReelsAIEditor.app/Contents/Frameworks/outputs
+```
+找最新那個資料夾，裡面 `run.log` 就是錯誤訊息。/ Find the newest folder; `run.log` inside has the full error.
+
+Windows: `Documents\ReelsAIEditor\outputs\<最新 job>\run.log`
+
+**2. 把 `run.log` 跟描述貼到 GitHub Issues / Open an issue with the log:**
+
+👉 [github.com/chang7856/reels-ai-editor/issues/new](https://github.com/chang7856/reels-ai-editor/issues/new)
+
+**3. 常見問題快查表 / Quick reference table:**
 
 | Symptom | Fix |
 |---|---|
+| 第一次跑卡在 "正在載入 Whisper"（10 分鐘以上）/ Stuck on "Loading Whisper" for 10+ min | 沒網路或被 HuggingFace 限速；確認網路後重試 / No internet, or HF rate-limit — check connection and retry |
 | Browser opens but page doesn't load | Port 5057 might be busy — quit other instances or restart your Mac |
-| "Cannot be opened because developer cannot be verified" | Right-click the app → Open (one-time bypass) |
+| "Cannot be opened because developer cannot be verified" | 跑那行 `xattr -dr com.apple.quarantine /Applications/ReelsAIEditor.app`（看本頁最上面）|
 | Upload fails with "影片格式無法讀取" | Re-export your video to `.mp4` (most editors do this by default) |
-| Transcription is slow on Intel Mac | Yep, Apple Silicon is 3–5× faster on Whisper. Use the M-chip Mac if you have one |
-| Whisper downloads 400 MB on first run | Normal. Only happens once, model is cached |
+| Transcription is slow on Intel Mac / Windows | 預期行為：沒有 ANE，會走 CPU fallback，慢 3-5× / Expected — no Apple Neural Engine, CPU fallback is 3-5× slower |
+| 第一次跑下載 1.5 GB / First run downloads 1.5 GB | Normal. Only happens once, model is cached |
 | App is corrupted / missing files on first run | Re-download the .dmg from the [Releases](../../releases/latest) page — the bundle ships with ffmpeg + ffprobe inside |
 
 ---
