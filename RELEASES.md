@@ -35,69 +35,125 @@ bilingual one-pager (中文 + English).
 
 ---
 
-## v1.1.0 — 2026-06-10
+## v1.1.0 — 2026-06-25
 
 Three platform binaries attached. All three actively maintained from this
 release forward (the Intel/Win freeze policy from v1.0 is rescinded).
 
 | Download | Platform | Status |
 |---|---|---|
-| `ReelsAIEditor-macOS-arm64.dmg` | macOS · Apple Silicon (M1/M2/M3/M4) | **Actively maintained** |
-| `ReelsAIEditor-macOS-intel.dmg`  | macOS · Intel CPU (pre-2020 Mac)   | Updated for v1.1 |
-| `ReelsAIEditor-Windows-x64.zip`  | Windows 10 / 11                    | Updated for v1.1 |
+| [`ReelsAIEditor-macOS-arm64.dmg`](https://github.com/chang7856/reels-ai-editor/releases/download/v1.1.0/ReelsAIEditor-macOS-arm64.dmg) | macOS · Apple Silicon (M1/M2/M3/M4) | **Actively maintained** |
+| [`ReelsAIEditor-macOS-intel.dmg`](https://github.com/chang7856/reels-ai-editor/releases/download/v1.1.0/ReelsAIEditor-macOS-intel.dmg) | macOS · Intel CPU (pre-2020 Mac)   | Updated for v1.1 |
+| [`ReelsAIEditor-Windows-x64.zip`](https://github.com/chang7856/reels-ai-editor/releases/download/v1.1.0/ReelsAIEditor-Windows-x64.zip) | Windows 10 / 11                    | Updated for v1.1 |
 
 ### What's new
 
+**Look & feel**
+- Y2K pixel-scissors app icon (粉 #FF6BB5 + 藍 #5BC2FF + 白) — Dock,
+  Launchpad, Spotlight, the .dmg, and the README. Reproducible via
+  `scripts/build_icon.sh` (pure PIL, no Adobe stack).
+
 **Speed (Apple Silicon)**
-- mlx-whisper-medium (Metal GPU + Neural Engine) replaces faster-whisper for
-  both ZH transcription AND ZH→EN translation
+- mlx-whisper-medium (Metal GPU + Neural Engine) replaces faster-whisper
+  for both ZH transcription AND ZH→EN translation
 - h264_videotoolbox hardware encoder replaces libx264 medium
 - ~150 s end-to-end on a 3-min talking-head clip
 
-**Content-aware POV hook**
-- Burnt-in title is picked from your actual transcript using 10 hook
-  patterns (numbered list, question, contrarian, mistake, secret,
-  time-promise, authority, emotion, urgency, topic anchor)
-- Hard completeness gate: incomplete fragments ("能不能夠…") are rejected
-- Hard filler veto: 好啦/嗯/OK/test openers can't become the hook
-- Title is always 2 lines in 2 colors; both lines are independent
-  complete concepts
+**ffmpeg 8.x compatibility (critical)**
+- `h264_videotoolbox` no longer takes `-q:v` in ffmpeg 8.x — every render
+  died with exit 187 at frame 0. Switched to `-b:v 8M -maxrate 12M
+  -bufsize 16M`.
+- `-filter_complex_script` regression in ffmpeg 8.x — multi-line filter
+  graphs error with `No option name near …`. Now reads the filter file
+  and passes it inline via `-filter_complex` with newlines stripped.
+  Without this, caption re-burn silently failed (subtitles.ass updated
+  but the .mp4 was unchanged).
 
-**Editable subtitles**
+**Content-aware POV hook AND cover text**
+- Burnt-in title and ALL cover text are derived from your transcript via
+  the same hook scorer + 2-concept split.
+- Hardcoded marketing templates removed ("AI 小編 / 真的能自動剪片",
+  "廣告流程 / 可以自動跑嗎", "重點已經 / 幫你整理好了" — gone).
+- Cover top band = #1 hook (2 concepts in 2 colors).
+- Cover bottom band = a distinct secondary hook from the same
+  transcript, OR left blank when no clean secondary exists.
+- Hard completeness gate rejects "能不能夠…" / "然後" / lone modal /
+  topic-shifter tails. Hard filler veto blocks 好啦/嗯/OK/test openers.
+- Burnt-in title always 2 lines in 2 colors; both lines are independent
+  complete concepts.
+
+**✏️ Cover text editor (new)**
+- Collapsible "編輯封面文字" panel: 6 editable slots in ZH mode
+  (top label + 2-line main + English supporting line + 2-line bottom),
+  5 in EN mode. "套用文案" re-renders the cover in ~1 s (no video
+  re-encode). Edits stay sticky across style flips and candidate flips.
+  Server-side whitelist + 60-char cap on each line.
+
+**Editable subtitles + re-burn**
 - Verification table under the output video: `[time]  ZH text  |  EN text`
-  per row, click time to seek, click cell to edit
-- "套用字幕修改" re-burns the video in ~30 seconds
-- All other buttons greyed out during the re-burn
+  per row, click time to seek, click cell to edit.
+- "套用字幕修改" re-burns the video in ~30 seconds.
+- **Video loading overlay** during re-burn — translucent black + spinner
+  + live elapsed-seconds counter covers the `<video>` so the user can't
+  play the pre-edit burn underneath.
+- **Job-expired banner** — if you press Apply after the 15-min retention
+  sweep wiped your job, the error is now "這個任務已經過期" with a clear
+  hint to re-upload (not the raw 404 string).
+- Old video stays playable on re-burn failure (no more black-screen
+  lockout).
 
 **Per-language sessions**
-- Chinese page and English page each remember their own finished result
-- ZH → EN → ZH round trip preserves the original ZH result
+- Chinese page and English page each remember their own finished result.
+- ZH → EN → ZH round trip preserves the original ZH result.
 
 **Cover styles**
-- Removed `繽紛大字` / Color Pop (only Editorial Bold and All-White Hook remain)
-- All-White Hook in-video title accent + EN subtitle are pure white now
+- Removed `繽紛大字` / Color Pop (only Editorial Bold and All-White
+  Hook remain).
+- All-White Hook in-video title accent + EN subtitle are pure white now.
 
 **Subtitle quality**
 - Hard `_verify_subtitle_layout()` assertion in pipeline: ZH and EN
-  subtitles never visually overlap
-- EN can wrap to 2 lines without colliding with ZH 2-line case
-- ASCII words containing punctuation (`OK,CheckCheck`) stay atomic
-- Fullwidth `ＡＩ` auto-converts to halfwidth `AI`
-- No 1-3 char orphans on the bottom line
+  subtitles never visually overlap.
+- EN can wrap to 2 lines without colliding with ZH 2-line case.
+- ASCII words containing punctuation (`OK,CheckCheck`) stay atomic.
+- Fullwidth `ＡＩ` auto-converts to halfwidth `AI`.
+- No 1-3 char orphans on the bottom line.
 - Silence detection tuned for Chinese: only cuts pauses > 0.74 s with
-  280 ms padding on each side
+  280 ms padding on each side.
 
-**UX**
-- Top dropzone clickable while a result is showing → auto-resets first
-- Re-uploading the same file works (Safari quirk handled)
-- Open Video / Open Cover open in new tab for preview
-- Double-clicking the .app icon while running no longer opens new tabs
-- Stale jobs (15-min cleanup) no longer flash "找不到這個任務" on page load
+**Whole flow in ONE browser window**
+- "下載 Reels 影片" / "下載封面" use the `download=` attribute — same
+  tab, native download dialog, no new windows during upload → process
+  → download.
+- Heartbeat-based Dock re-click: app touches a timestamp file on every
+  page request; clicking the icon while a tab is alive (heartbeat
+  ≤10s) silent-exits instead of stacking a new Chrome window. When
+  the tab IS closed (heartbeat stale), the icon reopens it.
+- Top dropzone clickable while a result is showing → auto-resets first.
+- Re-uploading the same file works (Safari quirk handled).
+- Stale jobs (15-min cleanup) no longer flash "找不到這個任務" on page
+  load.
+
+**macOS Sequoia 15 install (no Terminal)**
+- Drag to Applications → double-click → "Apple could not verify"
+  warning → click Done → System Settings → Privacy & Security → Open
+  Anyway → confirm with password / Touch ID. One time, permanent
+  whitelist. macOS 15 removed the older right-click → Open escape
+  hatch, so System Settings is now the canonical no-Terminal path.
+- `xattr -dr com.apple.quarantine` demoted to a collapsible "last
+  resort" footnote.
 
 **Build hygiene**
-- `REGRESSION_CHECKLIST.md` and `scripts/smoke_test.sh` (12 automated
-  gates including a lock for the "能不能夠" incomplete-sentence regression
-  so it can never come back)
+- `REGRESSION_CHECKLIST.md` and `scripts/smoke_test.sh` — **38
+  automated gates** that must pass before shipping, including specific
+  locks for:
+  - ffmpeg 8.x `-filter_complex` inline vs `-filter_complex_script`
+  - h264_videotoolbox uses `-b:v` not `-q:v`
+  - No hardcoded "AI 小編 / 重點已經 / 廣告流程" cover templates
+  - Download links use `download=` attribute, NOT `target="_blank"`
+  - Heartbeat-based dock re-click (no duplicate tabs)
+  - "能不能夠" incomplete-sentence regression
+  - "OK,CheckCheck" atomic tokenization
 
 ---
 
