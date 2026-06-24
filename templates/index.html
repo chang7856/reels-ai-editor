@@ -883,6 +883,84 @@
       font-size: 13px;
       color: #64748b;
     }
+    /* ── Re-burn progress + result toast ─────────────────────────────
+       The caption re-burn endpoint takes ~30s on M-chip. Without a
+       visible spinner the user can't tell anything is happening; without
+       a confirmation banner they can't tell it succeeded. Both surfaces
+       sit at the top of the result panel and stay visible long enough
+       for the user to register what changed.
+    */
+    .reburn-banner {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      animation: reburnBannerIn 0.18s ease-out;
+    }
+    .reburn-banner.show { display: flex; }
+    .reburn-banner.working {
+      background: #eff6ff;
+      border: 1px solid #93c5fd;
+      color: #1e40af;
+    }
+    .reburn-banner.success {
+      background: #ecfdf5;
+      border: 1px solid #6ee7b7;
+      color: #047857;
+    }
+    .reburn-banner.error {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+    }
+    @keyframes reburnBannerIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spinnerRotate 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spinnerRotate {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+    .reburn-banner .seconds {
+      margin-left: auto;
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      opacity: 0.75;
+      font-weight: 600;
+    }
+    /* Spinner inline inside the Apply button while disabled, so users
+       see "something is happening" without having to scroll to the
+       banner above the video. */
+    .primary.is-working {
+      position: relative;
+      padding-left: 38px;
+    }
+    .primary.is-working::before {
+      content: "";
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      width: 14px;
+      height: 14px;
+      margin-top: -7px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spinnerRotate 0.8s linear infinite;
+    }
     .transcript-ts {
       font-variant-numeric: tabular-nums;
       font-size: 12px;
@@ -1327,8 +1405,9 @@
         verifyError: "字幕對照載入失敗。",
         verifySeekHint: "跳到這一刻",
         applyEditsButton: "套用字幕修改（會重新燒一次影片，約 30 秒）",
-        verifyApplying: "重新燒字幕中⋯ 大約需要 30 秒",
-        verifyApplied: "字幕已更新，重新播放即可看到。",
+        verifyApplying: "正在重新燒字幕到影片裡⋯",
+        verifyApplyingHint: "大約 30 秒，請別關掉這個分頁",
+        verifyApplied: "✓ 字幕已更新，影片已重新載入，按播放即可看到新版",
         verifyApplyFailed: "字幕重新燒失敗",
         rulesTitle: "上傳規則與資安",
         ruleDurationTitle: "最長 10 分鐘",
@@ -1441,8 +1520,9 @@
         verifyError: "Could not load caption check.",
         verifySeekHint: "Jump to this moment",
         applyEditsButton: "Apply caption edits (re-burns the video, ~30 seconds)",
-        verifyApplying: "Re-burning captions… ~30 seconds",
-        verifyApplied: "Captions updated. Replay to see the new burn.",
+        verifyApplying: "Re-burning your edited captions into the video…",
+        verifyApplyingHint: "About 30 seconds — please don't close this tab",
+        verifyApplied: "✓ Captions updated. The video reloaded — hit play to see the new burn.",
         verifyApplyFailed: "Caption re-burn failed",
         rulesTitle: "Upload Rules & Security",
         ruleDurationTitle: "10 minutes max",
@@ -2234,6 +2314,7 @@
         ${candidateMarkup}
         <section class="output-video">
           <h3>${t("outputVideoTitle")}</h3>
+          <div id="reburnBanner" class="reburn-banner" role="status" aria-live="polite"></div>
           <video id="outputVideo" controls preload="metadata" playsinline src="${videoUrl}"></video>
         </section>
         <section class="transcript-verify">
@@ -2618,8 +2699,58 @@
             // user can't fire off conflicting actions ("再剪一支影片",
             // switch cover style, edit more rows) mid-render.
             applyBtn.disabled = true;
+            applyBtn.classList.add("is-working");
+            const originalBtnLabel = applyBtn.textContent;
+            applyBtn.textContent = t("verifyApplying");
             setResultPanelBusy(true);
-            if (status) status.textContent = t("verifyApplying");
+            if (status) status.textContent = "";
+            // Working banner above the video so the user sees something
+            // happening regardless of where they're scrolled. Counts up
+            // elapsed seconds since the request fired.
+            const banner = document.getElementById("reburnBanner");
+            const startedAt = performance.now();
+            let tickHandle = null;
+            const showWorkingBanner = () => {
+              if (!banner) return;
+              banner.className = "reburn-banner working show";
+              banner.innerHTML = `
+                <span class="spinner" aria-hidden="true"></span>
+                <span>
+                  <strong>${t("verifyApplying")}</strong><br>
+                  <span style="font-weight:600;opacity:.8;font-size:12px;">${t("verifyApplyingHint")}</span>
+                </span>
+                <span class="seconds" id="reburnSeconds">0s</span>
+              `;
+              tickHandle = setInterval(() => {
+                const elapsed = Math.floor((performance.now() - startedAt) / 1000);
+                const node = document.getElementById("reburnSeconds");
+                if (node) node.textContent = elapsed + "s";
+              }, 1000);
+            };
+            const clearBanner = () => {
+              if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
+            };
+            const showSuccessBanner = () => {
+              clearBanner();
+              if (!banner) return;
+              banner.className = "reburn-banner success show";
+              banner.innerHTML = `<span>${t("verifyApplied")}</span>`;
+              // Auto-fade the success banner after 12s so it doesn't sit
+              // there forever, but stay long enough that a user who looked
+              // away still catches it.
+              setTimeout(() => {
+                if (banner.classList.contains("success")) {
+                  banner.classList.remove("show");
+                }
+              }, 12000);
+            };
+            const showErrorBanner = (msg) => {
+              clearBanner();
+              if (!banner) return;
+              banner.className = "reburn-banner error show";
+              banner.innerHTML = `<span>${t("verifyApplyFailed")}: ${escapeHtml(msg)}</span>`;
+            };
+            showWorkingBanner();
             try {
               const resp = await fetch(`/jobs/${jobId}/captions`, {
                 method: "POST",
@@ -2628,20 +2759,35 @@
               });
               const j = await resp.json();
               if (!resp.ok) throw new Error(j.error || "HTTP " + resp.status);
-              if (status) status.textContent = t("verifyApplied");
-              // Force the <video> element to reload the freshly-encoded mp4
-              // (cache buster keyed to server timestamp).
+              // Force the <video> element to reload the freshly-encoded
+              // mp4. Chrome/Safari aggressively cache HTML5 video objects,
+              // so just setting `.src` to a new URL with a `?t=` cache
+              // buster isn't always enough — we have to fully detach and
+              // re-attach. Order matters: pause → currentTime=0 → remove
+              // src attr → load() empty → assign new src → load() again.
               if (video && j.video_url) {
-                video.src = j.video_url;
+                try { video.pause(); } catch (e) { /* ignore */ }
+                try { video.currentTime = 0; } catch (e) { /* ignore */ }
+                video.removeAttribute("src");
+                video.load();
+                // The server timestamp inside j.video_url IS the cache
+                // buster, but stack a per-request fragment too so that
+                // a 1-second collision can't keep the browser cache.
+                const buster = (j.video_url.includes("?") ? "&" : "?") + "r=" + (payload.length + Math.floor(performance.now()));
+                video.src = j.video_url + buster;
                 video.load();
               }
               // Clear dirty flags so the apply button can hide again.
               list.querySelectorAll(".transcript-row.dirty").forEach((n) => n.classList.remove("dirty"));
               if (actions) actions.hidden = true;
+              showSuccessBanner();
             } catch (err) {
-              if (status) status.textContent = t("verifyApplyFailed") + ": " + err.message;
+              showErrorBanner(err.message || "");
             } finally {
+              clearBanner();
               applyBtn.disabled = false;
+              applyBtn.classList.remove("is-working");
+              applyBtn.textContent = originalBtnLabel;
               setResultPanelBusy(false);
             }
           };
