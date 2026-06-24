@@ -125,9 +125,27 @@ gate "activePollToken sentinel in place" \
 gate "upload submit pins activeJob.lang" \
     'grep -q "reels.activeJob.lang" templates/index.html'
 
-echo "=== Frontend: open links in new tab ==="
-gate 'target="_blank" on Open Video' \
-    'grep -q "target=\"_blank\"" templates/index.html'
+echo "=== Result download links open in SAME tab (no target=_blank) ==="
+# User asked for the entire upload→download flow to live in one window.
+# Open Video / Open Cover must use the download attribute, not _blank.
+gate 'Open Video link uses download attribute, not target=_blank' \
+    'grep -E "class=\"download\" href=.*videoUrl" templates/index.html | grep -q "download=" && ! grep -E "class=\"download\" href=.*videoUrl" templates/index.html | grep -q "target=\""'
+gate 'Open Cover link uses download attribute, not target=_blank' \
+    'grep -E "class=\"download\" id=\"openCoverLink\"" templates/index.html | grep -q "download=" && ! grep -E "class=\"download\" id=\"openCoverLink\"" templates/index.html | grep -q "target=\""'
+gate 'i18n label is 下載/Download (not 開啟/Open)' \
+    'grep -q "下載 Reels 影片" templates/index.html && grep -q "Download Reels Video" templates/index.html'
+
+echo "=== Dock re-click uses heartbeat to avoid duplicate tabs ==="
+gate "app.py defines HEARTBEAT_FILE + _touch_heartbeat" \
+    'grep -q "HEARTBEAT_FILE" app.py && grep -q "_touch_heartbeat" app.py'
+gate "/ route touches heartbeat" \
+    'grep -B 1 -A 6 "def index" app.py | grep -q "_touch_heartbeat"'
+gate "/jobs/<id> polling also touches heartbeat" \
+    'grep -B 1 -A 6 "def job_status" app.py | grep -q "_touch_heartbeat"'
+gate "launch.py reads heartbeat before opening browser" \
+    'grep -q "_browser_tab_looks_alive" launch.py'
+gate "launch.py HEARTBEAT_FILE matches app.py path" \
+    'grep -q "reels-ai-editor-heartbeat" launch.py && grep -q "reels-ai-editor-heartbeat" app.py'
 
 echo "=== Frontend: result-panel busy lock ==="
 gate "setResultPanelBusy helper exists" \

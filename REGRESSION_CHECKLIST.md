@@ -108,10 +108,23 @@ Date last passed end-to-end: _(none)_
 - [ ] Top dropzone clickable when result is showing → auto-resets first
 - [ ] Drag-and-drop same file after completion still triggers upload
       (Safari quirk handled with `type` swap)
-- [ ] Clicking the .app icon while it's already running REOPENS a
-      browser tab at http://127.0.0.1:5057/ (don't silent-exit — the
-      v1.1.0 silent-exit left users stuck with no way back to the GUI
-      after they closed the browser tab)
+- [ ] Clicking the .app icon while it's already running uses the
+      heartbeat to decide: tab alive (heartbeat fresh ≤10s) → SILENT
+      exit, no new tab. Tab dead → reopen one. The bug we keep
+      ping-ponging between: silent-always leaves users stuck after
+      closing the browser; reopen-always stacks duplicate windows on
+      Chrome.
+- [ ] `/` and `/jobs/<id>` both call `_touch_heartbeat()`. (The job
+      poll keeps the heartbeat fresh during processing so a Dock
+      re-click mid-render doesn't pop a duplicate window.)
+
+## Result page download links
+
+- [ ] "下載 Reels 影片" / "下載封面" use the `download=` attribute,
+      NOT `target="_blank"`. Clicking triggers a native download
+      dialog in the same tab — does NOT open a new browser window.
+      User feedback: "從上傳到結束，直到我可以下載影片為止，你完成
+      的所有步驟都只能在同一個視窗內進行，不能再多開視窗。"
 - [ ] Open Video / Open Cover buttons open in new tab (`target="_blank"`)
 - [ ] "再剪一支影片" button resets the panel and scrolls to dropzone
 - [ ] restoreActiveJob on page load: PROBES /jobs/<id> first, only

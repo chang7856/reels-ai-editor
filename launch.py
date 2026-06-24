@@ -19,10 +19,21 @@ silently falling through to whatever ``python3`` the user has on PATH.
 """
 import os
 import sys
+import tempfile
 import threading
 import time
 import webbrowser
 from pathlib import Path
+
+
+# Mirror app.HEARTBEAT_FILE without importing app (which loads Whisper et al
+# just to read this one path). Keep these two definitions in sync.
+HEARTBEAT_FILE = Path(tempfile.gettempdir()) / "reels-ai-editor-heartbeat"
+# How fresh the heartbeat must be for us to treat the browser tab as live.
+# The GUI polls /jobs/<id> every ~2s while processing, every ~5s while idle
+# on the result panel, and stamps every / request. 10s comfortably covers
+# all three without false negatives if the laptop briefly slept.
+HEARTBEAT_FRESH_SECONDS = 10
 
 
 def _open_browser_when_ready(url: str, attempts: int = 30) -> None:
@@ -64,6 +75,25 @@ def _run_pipeline_mode(args):
     reels_gui_pipeline.main()
 
 
+def _browser_tab_looks_alive() -> bool:
+    """Return True when the heartbeat file says a browser tab was active
+    within the last HEARTBEAT_FRESH_SECONDS. We read int seconds out of
+    a file `app._touch_heartbeat` updates on every / and /jobs/<id>
+    request.
+
+    Returns False on missing/unparseable/stale -- the caller then opens
+    a new tab. Always False-safe (never raises).
+    """
+    try:
+        raw = HEARTBEAT_FILE.read_text().strip()
+        if not raw:
+            return False
+        last = int(raw)
+    except Exception:
+        return False
+    return (time.time() - last) <= HEARTBEAT_FRESH_SECONDS
+
+
 def _is_app_already_running(host: str = "127.0.0.1", port: int = 5057) -> bool:
     """Return True iff something is already serving HTTP on the GUI port.
 
@@ -93,25 +123,31 @@ def main() -> None:
 
     _setup_frozen_paths()
 
-    # Single-instance guard. The user can re-click the icon for two very
-    # different reasons:
+    # Single-instance guard. Three cases when the user (or LaunchServices)
+    # re-fires this entry point while Flask is already up:
     #
-    #   1) Browser tab is closed and they want the app back. Most common.
-    #      We MUST open a fresh tab — silently exiting here is the bug
-    #      that made the Dock icon "bounce then do nothing" in v1.1.0.
+    #   1) Browser tab is OPEN and live (heartbeat fresh). User is
+    #      impatient-clicking the Dock icon. DO NOTHING — opening a tab
+    #      would stack a duplicate window (Chrome does this even for
+    #      same-URL navigations). The existing tab is right there.
     #
-    #   2) They forgot the app was already running and accidentally
-    #      double-clicked. Opening a tab is harmless — macOS / browsers
-    #      generally focus an existing same-URL tab rather than stacking
-    #      duplicates. Worst case the user closes one extra tab.
+    #   2) Browser tab was CLOSED (heartbeat stale or missing). User
+    #      wants back in. Open a fresh tab.
     #
-    # The old code chose option (3): say nothing, do nothing. That left
-    # users with no way back to the GUI short of typing 127.0.0.1:5057
-    # by hand. So: ALWAYS reopen the browser, then exit cleanly.
+    #   3) Internal multi-instance fire (LaunchServices race, AppleEvent
+    #      reopen, …). Heartbeat is almost certainly fresh because the
+    #      page just polled. Same as (1): do nothing.
     if _is_app_already_running():
+        fresh = _browser_tab_looks_alive()
+        if fresh:
+            sys.stderr.write(
+                "Reels AI Editor is already running on http://127.0.0.1:5057/. "
+                "Your existing browser tab is live -- not opening a new one.\n"
+            )
+            return
         sys.stderr.write(
             "Reels AI Editor is already running on http://127.0.0.1:5057/. "
-            "Reopening your browser tab.\n"
+            "No live browser tab detected -- reopening one.\n"
         )
         try:
             webbrowser.open("http://127.0.0.1:5057/")

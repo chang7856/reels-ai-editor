@@ -1367,8 +1367,8 @@
         errorTooLongHelp: "影片超過 10 分鐘。請先剪短後再上傳。",
         errorTooLargeHelp: "檔案超過上限。請先壓縮到 1.2GB 以下，並確認影片少於 10 分鐘。",
         errorUnreadableHelp: "伺服器讀不到影片資訊，可能是檔案損毀或不是標準影片容器。",
-        openVideo: "開啟 Reels 影片",
-        openCover: "開啟封面",
+        openVideo: "下載 Reels 影片",
+        openCover: "下載封面",
         resetButton: "再剪一支影片",
         coverPreviewTitle: "目前的封面",
         coverPreviewDesc: "符合 IG Reels 安全區，重要文字不會被介面遮住。",
@@ -1482,8 +1482,8 @@
         errorTooLongHelp: "The video is longer than 10 minutes. Please trim it before uploading.",
         errorTooLargeHelp: "The file is over the limit. Compress it below 1.2GB and keep it under 10 minutes.",
         errorUnreadableHelp: "The server could not read the video metadata. The file may be damaged or not a standard video container.",
-        openVideo: "Open Reels Video",
-        openCover: "Open Cover",
+        openVideo: "Download Reels Video",
+        openCover: "Download Cover",
         resetButton: "Edit Another Video",
         coverPreviewTitle: "Current cover",
         coverPreviewDesc: "Lays out inside the Reels safe area — key text stays clear of the IG UI.",
@@ -2329,8 +2329,8 @@
           </div>
         </section>
         <div class="result-actions">
-          <a class="download" href="${videoUrl}" target="_blank" rel="noopener">${t("openVideo")}</a>
-          <a class="download" id="openCoverLink" href="${coverUrl}" target="_blank" rel="noopener">${t("openCover")}</a>
+          <a class="download" href="${videoUrl}" download="ReelsAIEditor-video.mp4">${t("openVideo")}</a>
+          <a class="download" id="openCoverLink" href="${coverUrl}" download="ReelsAIEditor-cover.jpg">${t("openCover")}</a>
           <button class="primary" id="resetFlow" type="button">${t("resetButton")}</button>
         </div>
       `;

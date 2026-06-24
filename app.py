@@ -4,9 +4,27 @@ import platform
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from pathlib import Path
+
+
+# Heartbeat that launch.py polls on dock re-clicks. Whenever the GUI is
+# fetched / polled we stamp `now`. launch.py reads this on a duplicate
+# launch: if the timestamp is fresh (≤ HEARTBEAT_FRESH_SECONDS), there's
+# already a live browser session and we DO NOT open a second tab.
+# Otherwise the user has closed the tab and re-clicking the icon should
+# reopen one. Single user, single instance -- /var/folders is fine.
+HEARTBEAT_FILE = Path(tempfile.gettempdir()) / "reels-ai-editor-heartbeat"
+
+
+def _touch_heartbeat():
+    try:
+        HEARTBEAT_FILE.write_text(str(int(time.time())))
+    except Exception:
+        # Heartbeat is a UX nicety; never let a write failure kill a request.
+        pass
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -261,6 +279,11 @@ def processing_progress(log, status, result, started_at, duration, progress_stat
 @app.get("/")
 def index():
     cleanup_old_files()
+    # Mark "browser tab is alive" so a Dock-icon re-click doesn't pop a
+    # duplicate window. Also refreshed by the job-poll endpoint so a tab
+    # sitting on the processing screen counts as alive even before the
+    # user hits /.
+    _touch_heartbeat()
     return render_template("index.html", memory=json.loads(MEMORY.read_text()))
 
 
@@ -348,6 +371,9 @@ def create_job():
 @app.get("/jobs/<job_id>")
 def job_status(job_id):
     cleanup_old_files()
+    # Job-status polling keeps the heartbeat fresh while a Reel is processing
+    # -- the result page may not be open yet but the browser tab IS alive.
+    _touch_heartbeat()
     job = jobs.get(job_id)
     job_dir = OUTPUTS / job_id
     if not job and not job_dir.exists():
