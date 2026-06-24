@@ -50,29 +50,29 @@
 2. **雙擊** 剛下載的 `.dmg`
 3. Finder 跳出小視窗，裡面有 ReelsAIEditor 圖示。**把它拖到旁邊的「應用程式」（Applications）資料夾**
 4. 視窗右上角 X 關掉。Desktop 上的灰色磁碟圖示，按右鍵 → 退出
-5. **第一次打開**：到「應用程式」資料夾，**對 ReelsAIEditor 按右鍵 → 「打開」**（不要雙擊！）
-6. 跳出「無法驗證開發者」警告 → 按 **「打開」** 按鈕
-7. 瀏覽器自動跳出 → 開始用。**這個警告一輩子只會出現一次**，之後雙擊就好。
+5. **第一次打開** — 雙擊 `ReelsAIEditor`，會跳「未打開 ReelsAIEditor / Apple 無法驗證」警告框，按 **「完成」**（**不是**「丟到垃圾桶」！）
+6. 打開 **🍎 → 系統設定 → 隱私權與安全性**
+7. 一直往下拉，會看到一行 **「ReelsAIEditor 已被擋住，因為它來自身分不明的開發者」** → 按右邊的 **「仍要打開」**
+8. 跳第二個確認框（會問你密碼 / Touch ID）→ 確認
+9. 瀏覽器自動跳出 → 開始用。**這個流程一輩子只做一次**，之後雙擊 icon 就直接開。
 
-> 為什麼第一次要按右鍵？因為我沒給 Apple 每年 $99 美金當註冊開發者，所以 macOS Gatekeeper 預設會擋未公證的 app。右鍵 → 打開是 Apple 自己提供的「我知道風險、放行」入口，按一次永久白名單。
+> 為什麼這麼麻煩？因為我沒給 Apple 每年 $99 美金當註冊開發者，所以 macOS Gatekeeper 預設擋未公證 app。
+> macOS 15（Sequoia）之後，Apple 把舊版的「右鍵 → 打開」按鈕拿掉了，現在 _唯一_ 不用 Terminal 的路就是上面這條「系統設定 → 仍要打開」。按一次永久白名單。
 
 <details>
-<summary>萬一右鍵 → 打開也被擋（macOS 15+ 偶爾會這樣）— 點開看備用方法</summary>
+<summary>還是不行嗎？（極少數狀況）— 點開看核選項</summary>
 
-**備用方法 A（System Settings，仍不用 Terminal）：**
-1. 雙擊 ReelsAIEditor 跳警告 → 按取消
-2. 打開「**系統設定 → 隱私權與安全性**」
-3. 拉到下面，會看到「ReelsAIEditor 已被擋住」→ 按右邊的「**仍要打開**」
-4. 跳第二個確認框 → 按「打開」
-
-**備用方法 B（核選項：Terminal）：**
-複製這行貼進 Terminal（⌘ + 空白鍵搜 Terminal）→ Enter，沒反應就是成功：
+如果系統設定裡 _沒有_ 出現「ReelsAIEditor 已被擋住」那一行，最後手段是 Terminal：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/ReelsAIEditor.app
 ```
 
+（⌘ + 空白鍵搜 `Terminal` → 整段複製貼上 → Enter，沒回應就是成功）
+
 </details>
+
+> **舊版 macOS 13 / 14 的人**：你可以走更短的路 — 對 `/Applications/ReelsAIEditor` 按右鍵 → 「打開」，警告框會多一顆「打開」按鈕，按下去就好。Sequoia 15 沒有那顆按鈕。
 
 ### 🖱️ 每次要剪片的時候（跟一般 App 一樣）
 
@@ -116,29 +116,29 @@ This section is for **first-time users who don't know what GitHub is, have never
 2. **Double-click** the downloaded `.dmg`
 3. A Finder window pops up with the `ReelsAIEditor` icon. **Drag it into the `Applications` folder next to it.**
 4. Close the window. Right-click the grey disk on your Desktop → Eject.
-5. **First launch — right-click, not double-click.** Open the `Applications` folder, **right-click `ReelsAIEditor` → "Open"**.
-6. A warning pops up about an unverified developer → click **"Open"**.
-7. Browser auto-launches and you're in. **This warning only shows up once** — from now on, double-click is fine.
+5. **First launch** — double-click `ReelsAIEditor`. A warning pops up ("Apple could not verify ReelsAIEditor…") with two buttons. Click **"Done"** (NOT "Move to Trash"!).
+6. Open **🍎 → System Settings → Privacy & Security**
+7. Scroll down. You'll see a line: **"ReelsAIEditor was blocked because it is not from an identified developer"** → click **"Open Anyway"** on the right
+8. A second confirmation dialog asks for your password / Touch ID → confirm
+9. Browser auto-launches and you're in. **You only do this flow once** — from then on, double-click works normally.
 
-> Why right-click first time? I haven't paid Apple's \$99 / year developer fee, so macOS Gatekeeper blocks unsigned apps by default. Right-click → Open is Apple's built-in "I accept the risk" escape hatch — one click, permanent whitelist.
+> Why so many steps? I haven't paid Apple's \$99 / year developer fee, so macOS Gatekeeper blocks unsigned apps by default.
+> macOS 15 (Sequoia) removed the older "right-click → Open → Open Anyway" button, so the System Settings path above is now the _only_ no-Terminal route. One-time, permanent whitelist.
 
 <details>
-<summary>If right-click → Open is also blocked (macOS 15+ occasionally tightens this) — click to expand fallbacks</summary>
+<summary>Still blocked? (Rare) — click for nuclear option</summary>
 
-**Fallback A (System Settings, still no Terminal):**
-1. Double-click ReelsAIEditor → warning → Cancel
-2. Open **System Settings → Privacy & Security**
-3. Scroll down — you'll see "ReelsAIEditor was blocked" → click **"Open Anyway"**
-4. Confirmation dialog → click "Open"
-
-**Fallback B (nuclear: Terminal):**
-Paste this into Terminal (⌘ + Space, type `Terminal`) → Enter. No output = success:
+If System Settings doesn't show the "ReelsAIEditor was blocked" line, last resort is Terminal:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/ReelsAIEditor.app
 ```
 
+(⌘ + Space → type `Terminal` → paste → Enter. No output = success.)
+
 </details>
+
+> **On macOS 13 / 14?** You have a shorter path — right-click `/Applications/ReelsAIEditor` → "Open" → the warning gets an extra "Open" button you can click. Sequoia 15 stripped that button out.
 
 ### 🖱️ Daily use — just click the icon (like any other app)
 

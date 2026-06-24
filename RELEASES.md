@@ -9,15 +9,21 @@
 For first-time users — see [README.md](README.md#中文--安裝跟使用) for the full
 bilingual one-pager (中文 + English).
 
-**Mac TL;DR — no Terminal needed:**
+**Mac TL;DR — no Terminal needed, even on macOS 15 (Sequoia):**
 
 ```
 1) Open the .dmg → drag ReelsAIEditor into Applications
-2) FIRST launch only: right-click ReelsAIEditor → Open → "Open" in warning dialog
-3) From now on, just click the icon like any other app
+2) FIRST launch: double-click → "Apple could not verify" warning → click DONE
+3) Open System Settings → Privacy & Security → scroll down
+4) Find "ReelsAIEditor was blocked..." → click "Open Anyway" → confirm with password / Touch ID
+5) Browser auto-opens. From now on, just click the icon like any other app.
 ```
 
-> Right-click → Open is Apple's built-in escape hatch for unsigned apps. One click, permanent whitelist. If macOS 15+ blocks even that, open System Settings → Privacy & Security → "Open Anyway". `xattr -dr com.apple.quarantine /Applications/ReelsAIEditor.app` is the nuclear last resort, not the first option.
+> Why? Apple charges \$99/yr for a developer cert and I didn't pay it, so Gatekeeper blocks unsigned apps. **macOS 15 Sequoia removed the old "right-click → Open" button**, so the System Settings flow above is now the _only_ no-Terminal path. One-time, permanent whitelist for your user account.
+>
+> On older **macOS 13 / 14** you have a shorter path: right-click `/Applications/ReelsAIEditor` → Open → the warning gets an extra "Open" button. Sequoia stripped that button.
+>
+> If System Settings doesn't even show the blocked-app line (rare): `xattr -dr com.apple.quarantine /Applications/ReelsAIEditor.app` in Terminal is the nuclear option.
 
 **Windows TL;DR:**
 
