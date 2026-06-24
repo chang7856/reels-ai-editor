@@ -890,6 +890,54 @@
        sit at the top of the result panel and stay visible long enough
        for the user to register what changed.
     */
+    .output-video {
+      position: relative;
+    }
+    /* Overlay on the video element itself during re-burn. User feedback:
+       "如果影片還沒有編輯好…應該先顯示 loading 畫面；等 loading 畫面結束
+       後，才可以讓新的影片播放。" While the encode runs we cover the
+       <video> so it can't be played (it would play the PRE-edit burn,
+       which is misleading). On success we swap the src and remove the
+       overlay; on failure we keep the previous video playable.
+    */
+    .video-loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: rgba(15, 23, 42, 0.78);
+      color: #f8fafc;
+      border-radius: 6px;
+      z-index: 5;
+      pointer-events: all;   /* swallows clicks so the user can't hit play */
+      font-weight: 700;
+      text-align: center;
+      padding: 24px;
+    }
+    .video-loading-overlay.show { display: flex; }
+    .video-loading-overlay .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid currentColor;
+      border-right-color: transparent;
+    }
+    .video-loading-overlay .label { font-size: 15px; }
+    .video-loading-overlay .hint {
+      font-size: 12px;
+      opacity: 0.75;
+      font-weight: 500;
+      max-width: 32ch;
+      line-height: 1.5;
+    }
+    .video-loading-overlay .elapsed {
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      opacity: 0.75;
+      font-weight: 600;
+    }
     .reburn-banner {
       display: none;
       align-items: center;
@@ -1409,6 +1457,8 @@
         verifyApplyingHint: "大約 30 秒，請別關掉這個分頁",
         verifyApplied: "✓ 字幕已更新，影片已重新載入，按播放即可看到新版",
         verifyApplyFailed: "字幕重新燒失敗",
+        verifyJobExpired: "這個任務已經過期（檔案 15 分鐘後自動清除）",
+        verifyJobExpiredHint: "請按下面的「再剪一支影片」重新上傳",
         rulesTitle: "上傳規則與資安",
         ruleDurationTitle: "最長 10 分鐘",
         ruleDurationText: "上傳後會先用 FFprobe 驗證長度，超過就拒絕處理。",
@@ -1524,6 +1574,8 @@
         verifyApplyingHint: "About 30 seconds — please don't close this tab",
         verifyApplied: "✓ Captions updated. The video reloaded — hit play to see the new burn.",
         verifyApplyFailed: "Caption re-burn failed",
+        verifyJobExpired: "This job has expired (files are wiped 15 minutes after upload)",
+        verifyJobExpiredHint: "Click \"Edit Another Video\" below to start a fresh upload",
         rulesTitle: "Upload Rules & Security",
         ruleDurationTitle: "10 minutes max",
         ruleDurationText: "The app validates duration with FFprobe before processing and rejects longer videos.",
@@ -2315,7 +2367,15 @@
         <section class="output-video">
           <h3>${t("outputVideoTitle")}</h3>
           <div id="reburnBanner" class="reburn-banner" role="status" aria-live="polite"></div>
-          <video id="outputVideo" controls preload="metadata" playsinline src="${videoUrl}"></video>
+          <div style="position: relative;">
+            <video id="outputVideo" controls preload="metadata" playsinline src="${videoUrl}"></video>
+            <div id="videoLoadingOverlay" class="video-loading-overlay" aria-hidden="true">
+              <span class="spinner" aria-hidden="true"></span>
+              <span class="label" id="videoOverlayLabel">${t("verifyApplying")}</span>
+              <span class="hint" id="videoOverlayHint">${t("verifyApplyingHint")}</span>
+              <span class="elapsed" id="videoOverlaySeconds">0s</span>
+            </div>
+          </div>
         </section>
         <section class="transcript-verify">
           <div class="transcript-header">
@@ -2704,87 +2764,128 @@
             applyBtn.textContent = t("verifyApplying");
             setResultPanelBusy(true);
             if (status) status.textContent = "";
+            // Pause the existing video BEFORE locking it behind the
+            // overlay -- otherwise it keeps playing the pre-edit burn
+            // muted-but-running underneath the spinner, which is creepy.
+            try { video && video.pause(); } catch (e) { /* ignore */ }
             // Working banner above the video so the user sees something
             // happening regardless of where they're scrolled. Counts up
-            // elapsed seconds since the request fired.
+            // elapsed seconds since the request fired. The same seconds
+            // value is mirrored into the video overlay so users staring
+            // at the video also see the timer.
             const banner = document.getElementById("reburnBanner");
+            const overlay = document.getElementById("videoLoadingOverlay");
+            const overlaySeconds = document.getElementById("videoOverlaySeconds");
+            const overlayLabel = document.getElementById("videoOverlayLabel");
+            const overlayHint = document.getElementById("videoOverlayHint");
+            if (overlayLabel) overlayLabel.textContent = t("verifyApplying");
+            if (overlayHint) overlayHint.textContent = t("verifyApplyingHint");
             const startedAt = performance.now();
             let tickHandle = null;
-            const showWorkingBanner = () => {
-              if (!banner) return;
-              banner.className = "reburn-banner working show";
-              banner.innerHTML = `
-                <span class="spinner" aria-hidden="true"></span>
-                <span>
-                  <strong>${t("verifyApplying")}</strong><br>
-                  <span style="font-weight:600;opacity:.8;font-size:12px;">${t("verifyApplyingHint")}</span>
-                </span>
-                <span class="seconds" id="reburnSeconds">0s</span>
-              `;
+            const showWorking = () => {
+              if (banner) {
+                banner.className = "reburn-banner working show";
+                banner.innerHTML = `
+                  <span class="spinner" aria-hidden="true"></span>
+                  <span>
+                    <strong>${t("verifyApplying")}</strong><br>
+                    <span style="font-weight:600;opacity:.8;font-size:12px;">${t("verifyApplyingHint")}</span>
+                  </span>
+                  <span class="seconds" id="reburnSeconds">0s</span>
+                `;
+              }
+              if (overlay) {
+                overlay.classList.add("show");
+                overlay.setAttribute("aria-hidden", "false");
+              }
               tickHandle = setInterval(() => {
                 const elapsed = Math.floor((performance.now() - startedAt) / 1000);
-                const node = document.getElementById("reburnSeconds");
-                if (node) node.textContent = elapsed + "s";
+                const banSec = document.getElementById("reburnSeconds");
+                if (banSec) banSec.textContent = elapsed + "s";
+                if (overlaySeconds) overlaySeconds.textContent = elapsed + "s";
               }, 1000);
             };
-            const clearBanner = () => {
+            const hideOverlay = () => {
+              if (overlay) {
+                overlay.classList.remove("show");
+                overlay.setAttribute("aria-hidden", "true");
+              }
+            };
+            const clearTick = () => {
               if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
             };
             const showSuccessBanner = () => {
-              clearBanner();
+              clearTick();
               if (!banner) return;
               banner.className = "reburn-banner success show";
               banner.innerHTML = `<span>${t("verifyApplied")}</span>`;
-              // Auto-fade the success banner after 12s so it doesn't sit
-              // there forever, but stay long enough that a user who looked
-              // away still catches it.
               setTimeout(() => {
                 if (banner.classList.contains("success")) {
                   banner.classList.remove("show");
                 }
               }, 12000);
             };
-            const showErrorBanner = (msg) => {
-              clearBanner();
+            const showErrorBanner = (msg, expired = false) => {
+              clearTick();
               if (!banner) return;
               banner.className = "reburn-banner error show";
-              banner.innerHTML = `<span>${t("verifyApplyFailed")}: ${escapeHtml(msg)}</span>`;
+              if (expired) {
+                // Specific 404 case: server's job dir has been wiped by
+                // the 15-min retention sweep. Tell the user that
+                // directly instead of dumping a raw error string.
+                banner.innerHTML = `
+                  <span>
+                    <strong>${t("verifyJobExpired")}</strong><br>
+                    <span style="font-weight:500;font-size:13px;opacity:.85;">
+                      ${t("verifyJobExpiredHint")}
+                    </span>
+                  </span>
+                `;
+              } else {
+                banner.innerHTML = `<span>${t("verifyApplyFailed")}: ${escapeHtml(msg)}</span>`;
+              }
             };
-            showWorkingBanner();
+            showWorking();
             try {
               const resp = await fetch(`/jobs/${jobId}/captions`, {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({segments: payload}),
               });
-              const j = await resp.json();
-              if (!resp.ok) throw new Error(j.error || "HTTP " + resp.status);
-              // Force the <video> element to reload the freshly-encoded
-              // mp4. Chrome/Safari aggressively cache HTML5 video objects,
-              // so just setting `.src` to a new URL with a `?t=` cache
-              // buster isn't always enough — we have to fully detach and
-              // re-attach. Order matters: pause → currentTime=0 → remove
-              // src attr → load() empty → assign new src → load() again.
+              const j = await resp.json().catch(() => ({}));
+              if (!resp.ok) {
+                const err = new Error(j.error || "HTTP " + resp.status);
+                err.expired = resp.status === 404;
+                throw err;
+              }
+              // Only NOW (after a confirmed-OK response) do we touch the
+              // <video> element. The previous version detached src
+              // BEFORE checking resp.ok, so a 404 left the user staring
+              // at a blank black box with no recovery.
+              //
+              // HTML5 <video> cache busting on Chrome/Safari requires
+              // a full detach: pause → currentTime=0 → remove src →
+              // load() empty → assign new src → load() again. Plus an
+              // extra `&r=…` fragment on top of the server's `?t=`
+              // so 1-second timestamp collisions can't reuse cache.
               if (video && j.video_url) {
                 try { video.pause(); } catch (e) { /* ignore */ }
                 try { video.currentTime = 0; } catch (e) { /* ignore */ }
                 video.removeAttribute("src");
                 video.load();
-                // The server timestamp inside j.video_url IS the cache
-                // buster, but stack a per-request fragment too so that
-                // a 1-second collision can't keep the browser cache.
                 const buster = (j.video_url.includes("?") ? "&" : "?") + "r=" + (payload.length + Math.floor(performance.now()));
                 video.src = j.video_url + buster;
                 video.load();
               }
-              // Clear dirty flags so the apply button can hide again.
               list.querySelectorAll(".transcript-row.dirty").forEach((n) => n.classList.remove("dirty"));
               if (actions) actions.hidden = true;
+              hideOverlay();
               showSuccessBanner();
             } catch (err) {
-              showErrorBanner(err.message || "");
+              hideOverlay();   // unlock the previous video so user can replay it
+              showErrorBanner(err.message || "", !!err.expired);
             } finally {
-              clearBanner();
+              clearTick();
               applyBtn.disabled = false;
               applyBtn.classList.remove("is-working");
               applyBtn.textContent = originalBtnLabel;
