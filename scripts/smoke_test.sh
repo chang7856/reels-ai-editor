@@ -151,6 +151,64 @@ gate "GUI ZH editor covers all 6 cover slots" \
 gate "GUI EN editor covers 4 EN slots + POV" \
     'grep -q "coverEditorEnMain1" templates/index.html && grep -q "coverEditorEnBottom1" templates/index.html'
 
+echo "=== Cover copy must be content-aware (no hardcoded marketing templates) ==="
+# Check the demo / hardcoded strings only appear in COMMENTS (lines starting
+# with whitespace + #) -- never as quoted string literals or JSON values.
+# A python comment-only mention is fine ("we removed this because ..."); a
+# string literal would mean the template is still being shipped.
+gate "no 'AI 小編' string literal in pipeline" \
+    '! grep -E "[\"'\'']AI 小編" reels_gui_pipeline.py'
+gate "no 'AI 小編' value in reels_memory.json" \
+    '! grep -q "AI 小編" reels_memory.json'
+gate "no '我把流程' / '直接做成 App' string literal" \
+    '! grep -E "[\"'\'']我把流程" reels_gui_pipeline.py && ! grep -E "[\"'\'']直接做成 App" reels_gui_pipeline.py'
+gate "no '重點已經' / '幫你整理好了' string literal" \
+    '! grep -E "[\"'\'']重點已經" reels_gui_pipeline.py && ! grep -E "[\"'\'']幫你整理好了" reels_gui_pipeline.py'
+gate "no '廣告流程' / '可以自動跑嗎' string literal" \
+    '! grep -E "[\"'\'']廣告流程" reels_gui_pipeline.py && ! grep -E "[\"'\'']可以自動跑嗎" reels_gui_pipeline.py'
+gate "build_cover_copy uses _pick_secondary_hook for bottom band" \
+    'grep -q "_pick_secondary_hook" reels_gui_pipeline.py'
+gate "reels_memory.json cover text fields start empty" \
+    'grep -q "\"main_line_1\": \"\"" reels_memory.json && grep -q "\"bottom_line_1\": \"\"" reels_memory.json'
+
+.venv-arm64/bin/python <<'PY'
+# Live cover copy: synthetic transcripts must not produce the old
+# "AI 小編" / "重點已經" hardcoded outputs.
+import sys, json
+sys.path.insert(0, '.')
+from reels_gui_pipeline import build_cover_copy
+
+memory = json.loads(open("reels_memory.json").read())
+
+# Used to false-trigger the AI template because "AI" appeared in transcript
+zh = [
+    {"start": 0.5, "end": 3.0, "text": "今天我們來聊聊 AI 工具"},
+    {"start": 3.0, "end": 7.0, "text": "其實大部分人都用錯方向"},
+    {"start": 7.0, "end": 11.0, "text": "你應該先問清楚目標再來挑工具"},
+]
+en = [
+    {"start": 0.5, "end": 3.0, "text": "Let's talk about AI tools today"},
+    {"start": 3.0, "end": 7.0, "text": "Most people approach this wrong"},
+    {"start": 7.0, "end": 11.0, "text": "Define your goal first, then pick a tool"},
+]
+cover, _ = build_cover_copy(memory, zh, en)
+assert "AI 小編" not in cover.get("main_line_1", ""), "REGRESSION: AI 小編 template fired"
+assert "真的能自動剪片" not in cover.get("main_line_2", ""), "REGRESSION: 真的能自動剪片 template fired"
+assert "我把流程" not in cover.get("bottom_line_1", ""), "REGRESSION: 我把流程 stock bottom fired"
+assert "重點已經" not in cover.get("bottom_line_1", ""), "REGRESSION: 重點已經 stock bottom fired"
+assert cover.get("main_line_1"), "main_line_1 empty"
+print(f"  PASS  content-aware cover for AI-mentioning video: {cover['main_line_1']!r} / {cover['main_line_2']!r}")
+
+# Short clip without a clean secondary hook -> bottom band MUST stay empty,
+# not silently fall back to stock filler.
+zh = [{"start": 0.5, "end": 3.0, "text": "我浪費了 3 年才發現這個秘密"}]
+en = [{"start": 0.5, "end": 3.0, "text": "I wasted 3 years before I found this secret"}]
+cover, _ = build_cover_copy(memory, zh, en)
+assert cover.get("bottom_line_1", "") == "", f"bottom should be empty, got {cover.get('bottom_line_1')!r}"
+assert cover.get("bottom_line_2", "") == "", f"bottom_2 should be empty"
+print(f"  PASS  short clip: bottom band empty (no stock filler)")
+PY
+
 .venv-arm64/bin/python <<'PY'
 # Backend live round-trip: send a cover_text override against a synthetic
 # result.json so we catch any drift between app.py's whitelist and what

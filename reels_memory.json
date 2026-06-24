@@ -1,5 +1,5 @@
 {
-  "title": "POV：全自動化 AI 小編跟廣告",
+  "title": "POV",
   "title_en": "POV: AI editor + ads on autopilot",
   "subtitle": {
     "traditional_chinese": true,
@@ -67,15 +67,16 @@
     "default_style": "editorial",
     "style": "bold white/yellow IG Reels cover",
     "top_label": "POV",
-    "main_line_1": "全自動化 AI",
-    "main_line_2": "小編跟廣告",
-    "english_line": "AI editor + ads on autopilot",
-    "en_main_line_1": "AI editor +",
-    "en_main_line_2": "ads on autopilot",
-    "bottom_line_1": "小團隊也能",
-    "bottom_line_2": "跑出一整套自動化",
-    "en_bottom_line_1": "A small team can",
-    "en_bottom_line_2": "run the whole stack",
+    "main_line_1": "",
+    "main_line_2": "",
+    "english_line": "",
+    "en_main_line_1": "",
+    "en_main_line_2": "",
+    "bottom_line_1": "",
+    "bottom_line_2": "",
+    "en_bottom_line_1": "",
+    "en_bottom_line_2": "",
+    "_text_default_note": "Cover text fields intentionally start empty. build_cover_copy fills them from the actual hook at runtime.",
     "styles": {
       "editorial": {
         "name_zh": "雜誌大標",

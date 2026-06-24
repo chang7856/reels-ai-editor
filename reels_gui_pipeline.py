@@ -1289,48 +1289,113 @@ def _split_en_headline(text, max_chars=18):
     return [" ".join(words[:best_split]), " ".join(words[best_split:])]
 
 
+def _cover_lines_from_segment(seg, en_segments):
+    """Derive (zh_line_1, zh_line_2, en_line_1, en_line_2, english_caption)
+    from a single ZH segment + its EN counterpart.
+
+    ZH split uses `_split_hook_into_two_concepts` (the same logic that
+    drives the burnt-in title) so the cover and the video title speak with
+    one voice. Falls back to `plain_wrap_zh` if the segment is monolithic.
+    EN split uses `_split_en_headline`. Any of the four lines may come back
+    empty -- callers must handle that.
+    """
+    zh_text = clean_zh(seg.get("text", ""))
+    if not zh_text:
+        return "", "", "", "", ""
+    parts = _split_hook_into_two_concepts(zh_text)
+    if parts and parts[0] and parts[1]:
+        zh1, zh2 = parts[0], parts[1]
+    else:
+        wrapped = plain_wrap_zh(zh_text, 9)
+        zh1 = wrapped[0] if wrapped else zh_text
+        zh2 = wrapped[1] if len(wrapped) > 1 else ""
+
+    en_caption = nearest_english_segment(en_segments, (seg["start"] + seg["end"]) / 2)
+    if en_caption:
+        en_split = _split_en_headline(en_caption)
+        en1, en2 = en_split[0], en_split[1]
+    else:
+        en1, en2 = "", ""
+    return zh1, zh2, en1, en2, en_caption
+
+
+def _pick_secondary_hook(zh_segments, primary_start):
+    """Pick a SECOND high-scoring segment to populate the cover's bottom
+    band. Returns None when no clean secondary exists -- callers then leave
+    the bottom band empty rather than ship a stock filler.
+
+    Requirements:
+      - distinct from the primary hook (different start time)
+      - passes `_segment_looks_complete` (no dangling "能不能夠" tails)
+      - splits cleanly into two concepts (so the bottom band can show 2 lines
+        in 2 colors, same rule as the top hook)
+    """
+    for candidate in ranked_hook_candidates(zh_segments, top_k=6):
+        if abs(candidate.get("start", 0) - primary_start) < 0.05:
+            continue
+        text = clean_zh(candidate.get("text", ""))
+        if not _segment_looks_complete(text):
+            continue
+        parts = _split_hook_into_two_concepts(text)
+        if not (parts and parts[0] and parts[1]):
+            continue
+        return candidate
+    return None
+
+
 def build_cover_copy(memory, zh_segments, en_segments):
+    """Cover text is derived from the user's actual content, end-to-end.
+
+    Layout, top to bottom:
+      - top_label  : "POV" (universal Reels framing)
+      - main_*     : the #1 hook, split into two concepts
+      - english_line / en_main_*: the EN translation of that hook
+      - bottom_*   : the #2 hook (a distinct secondary beat), same two-
+                     concept split. Empty when no secondary passes the
+                     completeness/split gates -- we leave the bottom band
+                     blank rather than burn in stock filler that has
+                     nothing to do with the actual video.
+
+    The user can still rewrite any line via the "✏️ 編輯封面文字" panel
+    in the GUI -- so even if the auto-derivation lands somewhere awkward,
+    they keep full control.
+    """
     cover = dict(memory["cover"])
     hook = best_hook_segment(zh_segments)
     if not hook:
         return cover, None
-    hook_time = max(0.2, (hook["start"] + hook["end"]) / 2)
-    transcript = clean_zh(" ".join(seg.get("text", "") for seg in zh_segments[:16]))
-    hook_text = clean_zh(hook["text"])
-    if any(word in transcript for word in ["AI", "自動", "剪輯", "小編"]):
-        cover["main_line_1"] = "AI 小編"
-        cover["main_line_2"] = "真的能自動剪片？"
-        cover["english_line"] = "Can AI really edit Reels for you?"
-        cover["en_main_line_1"] = "Can AI really"
-        cover["en_main_line_2"] = "edit Reels for you?"
-        cover["bottom_line_1"] = "我把流程"
-        cover["bottom_line_2"] = "直接做成 App"
-        cover["en_bottom_line_1"] = "I shipped"
-        cover["en_bottom_line_2"] = "the whole pipeline"
-    elif any(word in transcript for word in ["廣告", "Google", "投放", "成本"]):
-        cover["main_line_1"] = "廣告流程"
-        cover["main_line_2"] = "可以自動跑嗎？"
-        cover["english_line"] = "Can ads run on autopilot?"
-        cover["en_main_line_1"] = "Can ads"
-        cover["en_main_line_2"] = "run on autopilot?"
-        cover["bottom_line_1"] = "小團隊也能"
-        cover["bottom_line_2"] = "省下重複工作"
-        cover["en_bottom_line_1"] = "A small team"
-        cover["en_bottom_line_2"] = "saves the repeat work"
+
+    # Top hook -> main_line + en_main_line + english_line
+    zh1, zh2, en1, en2, en_caption = _cover_lines_from_segment(hook, en_segments)
+    if zh1:
+        cover["main_line_1"] = zh1
+    if zh2:
+        cover["main_line_2"] = zh2
+    if en1:
+        cover["en_main_line_1"] = en1
+    if en2:
+        cover["en_main_line_2"] = en2
+    if en_caption:
+        cover["english_line"] = wrap_en(en_caption, 32).replace(r"\N", " ")
+
+    # Bottom hook -> bottom_line + en_bottom_line. Wipe any inherited
+    # default first so a stale demo string from reels_memory.json can
+    # never leak through when this video has no secondary beat.
+    cover["bottom_line_1"] = ""
+    cover["bottom_line_2"] = ""
+    cover["en_bottom_line_1"] = ""
+    cover["en_bottom_line_2"] = ""
+    secondary = _pick_secondary_hook(zh_segments, hook.get("start", 0))
+    if secondary is not None:
+        s_zh1, s_zh2, s_en1, s_en2, _ = _cover_lines_from_segment(secondary, en_segments)
+        cover["bottom_line_1"] = s_zh1
+        cover["bottom_line_2"] = s_zh2
+        cover["en_bottom_line_1"] = s_en1
+        cover["en_bottom_line_2"] = s_en2
+        log(f"  cover secondary hook @ {secondary['start']:.1f}s: {s_zh1!r} / {s_zh2!r}")
     else:
-        lines = plain_wrap_zh(hook_text, 9)
-        if lines:
-            cover["main_line_1"] = lines[0]
-            cover["main_line_2"] = lines[1] if len(lines) > 1 else "這段值得看完"
-        english = nearest_english_segment(en_segments, hook_time)
-        en_main = _split_en_headline(english or "This is worth watching")
-        cover["en_main_line_1"], cover["en_main_line_2"] = en_main[0], en_main[1] or "This is worth watching"
-        if english:
-            cover["english_line"] = wrap_en(english, 32).replace(r"\N", " ")
-        cover["bottom_line_1"] = "重點已經"
-        cover["bottom_line_2"] = "幫你整理好了"
-        cover["en_bottom_line_1"] = "Key takeaways"
-        cover["en_bottom_line_2"] = "saved for you"
+        log("  cover: no secondary hook clean enough — bottom band left empty")
+
     cover["top_label"] = "POV"
     return cover, hook
 
@@ -1882,8 +1947,8 @@ def fit_font_to_width(draw, text, font_path, base_size, max_width=640, stroke_wi
     text width fits inside `max_width` pixels. Returns the chosen ImageFont.
 
     Used by cover renderers (especially the Color Pop / centered_hero
-    layout) so a hook like "全自動化 AI 小編跟廣告" or a long English
-    headline never bleeds past the 720 px canvas edge. We leave 40 px of
+    layout) so a long ZH or EN headline never bleeds past the 720 px
+    canvas edge. We leave 40 px of
     horizontal safe area on each side by default (max_width=640).
     """
     if not text:

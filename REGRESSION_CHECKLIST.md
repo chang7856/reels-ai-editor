@@ -40,6 +40,24 @@ Date last passed end-to-end: _(none)_
 - [ ] Silence cuts only fire on pauses > 0.74s with 280 ms padding on
       each side (Chinese-tuned)
 
+## Cover text is content-aware (every video)
+
+- [ ] No hardcoded marketing templates in `build_cover_copy`
+      ("AI 小編" / "我把流程" / "重點已經" / "廣告流程" all banned —
+      smoke_test.sh greps for these and fails)
+- [ ] Top band (`main_line_1` + `main_line_2`) comes from the #1 hook
+      via `_split_hook_into_two_concepts` (same source as burnt-in title)
+- [ ] Bottom band (`bottom_line_1` + `bottom_line_2`) comes from
+      `_pick_secondary_hook` — a DIFFERENT high-scoring segment that
+      also passes completeness + 2-concept split gates
+- [ ] When no secondary passes the gates, the bottom band stays EMPTY
+      rather than falling back to stock filler ("重點已經 / 幫你整理好了")
+- [ ] English supporting line (`english_line`) translates the #1 hook,
+      not a hardcoded marketing phrase
+- [ ] Two consecutive uploads with DIFFERENT topics produce DIFFERENT
+      cover text (regression test: upload a video about 感情 then one
+      about AI — the headlines must NOT match)
+
 ## Editable cover text
 
 - [ ] "✏️ 編輯封面文字" panel collapsed by default on result page
