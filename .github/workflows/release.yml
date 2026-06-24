@@ -1,6 +1,6 @@
 name: Build release binaries
 
-# Triggered by pushing a tag like v1.0.0, OR manually from the Actions tab.
+# Triggered by pushing a tag like v1.1.0, OR manually from the Actions tab.
 on:
   push:
     tags: ['v*']
