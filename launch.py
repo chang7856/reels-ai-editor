@@ -93,17 +93,30 @@ def main() -> None:
 
     _setup_frozen_paths()
 
-    # Single-instance guard: if Flask is already up on 5057, exit silently.
-    # We deliberately do NOT call webbrowser.open() here -- every prior
-    # launch would have added another tab pointing at the same URL, and
-    # the user reported ending up with 3 tabs from a single editing session
-    # while clicking the .app icon a few times. The existing tab is still
-    # there; macOS will surface it when the user activates Safari/Chrome.
+    # Single-instance guard. The user can re-click the icon for two very
+    # different reasons:
+    #
+    #   1) Browser tab is closed and they want the app back. Most common.
+    #      We MUST open a fresh tab — silently exiting here is the bug
+    #      that made the Dock icon "bounce then do nothing" in v1.1.0.
+    #
+    #   2) They forgot the app was already running and accidentally
+    #      double-clicked. Opening a tab is harmless — macOS / browsers
+    #      generally focus an existing same-URL tab rather than stacking
+    #      duplicates. Worst case the user closes one extra tab.
+    #
+    # The old code chose option (3): say nothing, do nothing. That left
+    # users with no way back to the GUI short of typing 127.0.0.1:5057
+    # by hand. So: ALWAYS reopen the browser, then exit cleanly.
     if _is_app_already_running():
         sys.stderr.write(
-            "Reels AI Editor is already running on http://127.0.0.1:5057/.\n"
-            "Switch to your browser tab to use it.\n"
+            "Reels AI Editor is already running on http://127.0.0.1:5057/. "
+            "Reopening your browser tab.\n"
         )
+        try:
+            webbrowser.open("http://127.0.0.1:5057/")
+        except Exception:
+            pass
         return
 
     threading.Thread(

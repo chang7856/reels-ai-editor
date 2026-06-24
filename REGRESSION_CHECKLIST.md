@@ -90,8 +90,10 @@ Date last passed end-to-end: _(none)_
 - [ ] Top dropzone clickable when result is showing → auto-resets first
 - [ ] Drag-and-drop same file after completion still triggers upload
       (Safari quirk handled with `type` swap)
-- [ ] Double-clicking the .app icon while it's running does NOT open a
-      new browser tab (silent exit on port-already-in-use)
+- [ ] Clicking the .app icon while it's already running REOPENS a
+      browser tab at http://127.0.0.1:5057/ (don't silent-exit — the
+      v1.1.0 silent-exit left users stuck with no way back to the GUI
+      after they closed the browser tab)
 - [ ] Open Video / Open Cover buttons open in new tab (`target="_blank"`)
 - [ ] "再剪一支影片" button resets the panel and scrolls to dropzone
 - [ ] restoreActiveJob on page load: PROBES /jobs/<id> first, only
