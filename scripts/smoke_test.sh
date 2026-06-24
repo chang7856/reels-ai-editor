@@ -96,6 +96,17 @@ echo "=== Subtitle pipeline: layout assertion exists ==="
 gate "_verify_subtitle_layout in code" \
     'grep -q "_verify_subtitle_layout" reels_gui_pipeline.py'
 
+echo "=== render_video uses inline -filter_complex (ffmpeg 8 compat) ==="
+# ffmpeg 8.x mis-parses multi-line `-filter_complex_script` files; the
+# last `;\n` between chains is treated as part of the chain. We strip
+# newlines and inline the filter via `-filter_complex` instead. If a
+# future commit puts `-filter_complex_script` back, every caption
+# re-burn dies silently in production.
+gate "render_video does NOT pass -filter_complex_script as a flag" \
+    '! grep -E "\"-filter_complex_script\"" reels_gui_pipeline.py'
+gate "render_video reads filter_path and strips newlines" \
+    'grep -A 20 "def render_video" reels_gui_pipeline.py | grep -q "filter_path.read_text" && grep -A 20 "def render_video" reels_gui_pipeline.py | grep -F "filter_graph_inline"'
+
 echo "=== h264_videotoolbox uses -b:v not -q:v (ffmpeg 8 compat) ==="
 # ffmpeg 8.x dropped -q:v / qscale for h264_videotoolbox. Any build that
 # still passes -q:v dies with exit 187 at frame 0. Locking this fix.

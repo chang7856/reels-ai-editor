@@ -1877,10 +1877,19 @@ def render_video(video, filter_path, output, memory):
     crf = str(int(export.get("crf", 22)))
     log(f"  encoder: {encoder}")
 
+    # ffmpeg 8.x's `-filter_complex_script` regressed on multi-line graphs:
+    # it treats the last `\n` between filterchains as part of the filterchain
+    # instead of a separator, then errors with "No option name near …".
+    # We keep filter.txt readable (`;\n` between chains, for `cat`-friendly
+    # debugging) and feed ffmpeg the same content INLINE via `-filter_complex`
+    # with newlines stripped. The graph is ~6 KB -- nowhere near the macOS
+    # argv length limit -- so inlining is safe.
+    filter_graph_inline = filter_path.read_text().replace("\n", "")
+
     cmd = [
         "ffmpeg", "-hide_banner", "-y",
         "-i", str(video),
-        "-filter_complex_script", str(filter_path),
+        "-filter_complex", filter_graph_inline,
         "-map", "[vout]",
         "-map", "[aout]",
         "-c:v", encoder,

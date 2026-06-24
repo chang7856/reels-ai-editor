@@ -132,6 +132,20 @@ Date last passed end-to-end: _(none)_
 - [ ] Background colors / progress bars never appear without a real
       in-flight upload
 
+## ffmpeg 8.x filter-graph plumbing
+
+- [ ] `render_video` reads filter.txt and passes the content inline via
+      `-filter_complex` (newlines stripped). NEVER uses
+      `-filter_complex_script <path>` — that worked on ffmpeg 7 but
+      ffmpeg 8.x's parser mis-handles the final `;\n` between the [cv]
+      and [ca] chains and errors out with
+      `No option name near '/path/to/subtitles.ass'`. Symptom: caption
+      re-burn writes new subtitles.ass but the .mp4 is unchanged
+      because ffmpeg returned non-zero before the encode started.
+- [ ] filter.txt content is still split with `;\n` separators (for
+      `cat`-friendly debugging). The stripping happens in render_video
+      only.
+
 ## h264_videotoolbox encoder (ffmpeg 8.x)
 
 - [ ] `render_video` passes `-b:v <bitrate>` for h264_videotoolbox,
