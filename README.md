@@ -41,41 +41,51 @@
 
 下面這段是給「**完全沒做過開發、第一次看 GitHub 也不知道是什麼**」的人看的。
 
-### 🍎 在 Mac 上裝（一輩子只做一次）
+### 🍎 在 Mac 上裝（一輩子只做一次，**不用 Terminal**）
 
 1. 到 [**Releases**](../../releases/latest) 頁面，下載對應你 Mac 的檔案：
    - **Mac 是 M1 / M2 / M3 / M4**（2020 年後的）→ 抓 `ReelsAIEditor-macOS-arm64.dmg`
    - **Mac 是 Intel 處理器**（2020 年前的）→ 抓 `ReelsAIEditor-macOS-intel.dmg`
    - 不確定？點左上角 🍎 →「關於這台 Mac」→ 看「晶片」欄。寫 M 開頭就是 arm64
 2. **雙擊** 剛下載的 `.dmg`
-3. Finder 跳出一個小視窗，裡面有 ReelsAIEditor 圖示。**把它拖到旁邊的「應用程式」（Applications）資料夾**
+3. Finder 跳出小視窗，裡面有 ReelsAIEditor 圖示。**把它拖到旁邊的「應用程式」（Applications）資料夾**
 4. 視窗右上角 X 關掉。Desktop 上的灰色磁碟圖示，按右鍵 → 退出
-5. **打開「終端機」**：⌘ + 空白鍵搜尋 `Terminal`，按 Enter
-6. 把下面這行**整段複製、貼進去、按 Enter**：
+5. **第一次打開**：到「應用程式」資料夾，**對 ReelsAIEditor 按右鍵 → 「打開」**（不要雙擊！）
+6. 跳出「無法驗證開發者」警告 → 按 **「打開」** 按鈕
+7. 瀏覽器自動跳出 → 開始用。**這個警告一輩子只會出現一次**，之後雙擊就好。
 
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/ReelsAIEditor.app
-   ```
+> 為什麼第一次要按右鍵？因為我沒給 Apple 每年 $99 美金當註冊開發者，所以 macOS Gatekeeper 預設會擋未公證的 app。右鍵 → 打開是 Apple 自己提供的「我知道風險、放行」入口，按一次永久白名單。
 
-7. 看起來沒反應就是成功了（Mac 的習慣：成功就靜悄悄）
-8. 關掉終端機。**整輩子不用再開了。**
+<details>
+<summary>萬一右鍵 → 打開也被擋（macOS 15+ 偶爾會這樣）— 點開看備用方法</summary>
 
-> 為什麼要這一步？因為我沒給 Apple 每年 $99 美金當註冊開發者，所以 Mac 預設會擋。這行指令對 Mac 任何使用者都有效，不需要密碼，不會動到別的東西，只是告訴 Mac「這個 App 我自己下載的，別擋」。
+**備用方法 A（System Settings，仍不用 Terminal）：**
+1. 雙擊 ReelsAIEditor 跳警告 → 按取消
+2. 打開「**系統設定 → 隱私權與安全性**」
+3. 拉到下面，會看到「ReelsAIEditor 已被擋住」→ 按右邊的「**仍要打開**」
+4. 跳第二個確認框 → 按「打開」
 
-### 🖱️ 每次要剪片的時候
+**備用方法 B（核選項：Terminal）：**
+複製這行貼進 Terminal（⌘ + 空白鍵搜 Terminal）→ Enter，沒反應就是成功：
 
-跟用一般 App 一樣，**就點 .app 圖示**：
+```bash
+xattr -dr com.apple.quarantine /Applications/ReelsAIEditor.app
+```
 
-1. 從以下任一處點 **ReelsAIEditor** 圖示：
-   - Launchpad 的 App 列表
-   - Finder → 應用程式 → 雙擊 `ReelsAIEditor`
-   - Spotlight（⌘ + 空白鍵）→ 打 `reels` → Enter
-2. 瀏覽器會**自動跳出** `http://127.0.0.1:5057/`
-3. 把影片拖進去 → 等剪好 → 下載
-4. 用完直接關瀏覽器分頁就好
+</details>
 
-> 不小心關掉分頁但 App 還沒關？瀏覽器網址列打 `127.0.0.1:5057` 就回來。
-> 重開機、關機後，再點一次 .app 圖示就好，**不用再跑 xattr**。
+### 🖱️ 每次要剪片的時候（跟一般 App 一樣）
+
+**就點 icon。** 三個地方任一個：
+
+- **Launchpad** 的 App 列表 → 點剪刀圖示
+- **Finder → 應用程式** → 雙擊 `ReelsAIEditor`
+- **Spotlight**（⌘ + 空白鍵）→ 打 `reels` → Enter
+
+然後：瀏覽器自動跳出 `http://127.0.0.1:5057/` → 拖影片進去 → 等剪好 → 下載。
+
+> 不小心關掉分頁但 App 還沒關？瀏覽器網址列打 `127.0.0.1:5057` 就回來（這個網址每個人都一樣，是你 Mac 自己的 loopback，不會跟別人衝突）。
+> 重開機、關機後，再點一次 icon 就好。**不會再跳開發者警告，也不用碰 Terminal。**
 
 ### 🪟 在 Windows 上裝（更簡單）
 
@@ -97,7 +107,7 @@
 
 This section is for **first-time users who don't know what GitHub is, have never seen Terminal, and just want the thing to work**.
 
-### 🍎 Install on Mac (one-time, ever)
+### 🍎 Install on Mac (one-time, **no Terminal**)
 
 1. Go to [**Releases**](../../releases/latest) and download the file for your Mac:
    - **Mac with M1 / M2 / M3 / M4** (2020 onwards) → grab `ReelsAIEditor-macOS-arm64.dmg`
@@ -106,32 +116,42 @@ This section is for **first-time users who don't know what GitHub is, have never
 2. **Double-click** the downloaded `.dmg`
 3. A Finder window pops up with the `ReelsAIEditor` icon. **Drag it into the `Applications` folder next to it.**
 4. Close the window. Right-click the grey disk on your Desktop → Eject.
-5. **Open Terminal**: ⌘ + Space → type `Terminal` → Enter
-6. Copy the line below, **paste it into Terminal, hit Enter**:
+5. **First launch — right-click, not double-click.** Open the `Applications` folder, **right-click `ReelsAIEditor` → "Open"**.
+6. A warning pops up about an unverified developer → click **"Open"**.
+7. Browser auto-launches and you're in. **This warning only shows up once** — from now on, double-click is fine.
 
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/ReelsAIEditor.app
-   ```
+> Why right-click first time? I haven't paid Apple's \$99 / year developer fee, so macOS Gatekeeper blocks unsigned apps by default. Right-click → Open is Apple's built-in "I accept the risk" escape hatch — one click, permanent whitelist.
 
-7. No output = success (Mac convention: silence is good)
-8. Close Terminal. **You'll never need to touch it again.**
+<details>
+<summary>If right-click → Open is also blocked (macOS 15+ occasionally tightens this) — click to expand fallbacks</summary>
 
-> Why this step? I haven't paid Apple's \$99 / year developer fee, so macOS Gatekeeper blocks the app by default. This one-liner works for any Mac user — no password, no system change, just tells macOS "I downloaded this myself, don't block it."
+**Fallback A (System Settings, still no Terminal):**
+1. Double-click ReelsAIEditor → warning → Cancel
+2. Open **System Settings → Privacy & Security**
+3. Scroll down — you'll see "ReelsAIEditor was blocked" → click **"Open Anyway"**
+4. Confirmation dialog → click "Open"
 
-### 🖱️ Daily use — every time you want to edit
+**Fallback B (nuclear: Terminal):**
+Paste this into Terminal (⌘ + Space, type `Terminal`) → Enter. No output = success:
 
-Treat it like any other app: **click the icon**.
+```bash
+xattr -dr com.apple.quarantine /Applications/ReelsAIEditor.app
+```
 
-1. Launch **ReelsAIEditor** from any of these:
-   - Launchpad's app grid
-   - Finder → Applications → double-click `ReelsAIEditor`
-   - Spotlight (⌘ + Space) → type `reels` → Enter
-2. Your browser **auto-opens** `http://127.0.0.1:5057/`
-3. Drop a video in → wait → download
-4. When done, just close the browser tab
+</details>
 
-> Accidentally closed the tab but app's still running? Type `127.0.0.1:5057` in your browser's address bar.
-> After a reboot, just click the .app icon again — **you don't need to re-run the xattr command**.
+### 🖱️ Daily use — just click the icon (like any other app)
+
+Launch **ReelsAIEditor** from any of these:
+
+- **Launchpad** → click the scissors icon
+- **Finder → Applications** → double-click `ReelsAIEditor`
+- **Spotlight** (⌘ + Space) → type `reels` → Enter
+
+Then: browser auto-opens `http://127.0.0.1:5057/` → drop a video in → wait → download.
+
+> Closed the tab but app's still running? Type `127.0.0.1:5057` in any browser. This URL is the same on every Mac — it's your own loopback, never reachable from outside.
+> After a reboot, just click the icon again. **No more developer warning, no Terminal.**
 
 ### 🪟 Install on Windows (easier)
 

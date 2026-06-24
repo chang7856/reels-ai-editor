@@ -7,15 +7,17 @@
 ## ⚡ How to install (read this first)
 
 For first-time users — see [README.md](README.md#中文--安裝跟使用) for the full
-bilingual one-pager (中文 + English) with screenshots-worth of detail.
+bilingual one-pager (中文 + English).
 
-**Mac TL;DR:**
+**Mac TL;DR — no Terminal needed:**
 
-```bash
-# 1) Drag ReelsAIEditor.app into /Applications, then open Terminal and run:
-xattr -dr com.apple.quarantine /Applications/ReelsAIEditor.app
-# 2) Done. Open the app from Launchpad like any other. Browser auto-opens.
 ```
+1) Open the .dmg → drag ReelsAIEditor into Applications
+2) FIRST launch only: right-click ReelsAIEditor → Open → "Open" in warning dialog
+3) From now on, just click the icon like any other app
+```
+
+> Right-click → Open is Apple's built-in escape hatch for unsigned apps. One click, permanent whitelist. If macOS 15+ blocks even that, open System Settings → Privacy & Security → "Open Anyway". `xattr -dr com.apple.quarantine /Applications/ReelsAIEditor.app` is the nuclear last resort, not the first option.
 
 **Windows TL;DR:**
 
